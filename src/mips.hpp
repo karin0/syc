@@ -58,7 +58,7 @@ struct Func {
     vector<LoadInst *> arg_loads;
     vector<BinaryInst *> allocas;
     uint max_call_arg_num = 0;
-    uint stack_size = 0;  // without 4
+    uint spill_num = 0;  // without 4; spill & allocas (arrays)
 
     explicit Func(ir::Func *ir);
 
@@ -128,7 +128,11 @@ namespace Regs {
         21, 22, 23
     };
 
+    extern std::array<uint, 32> inv_allocatable;
+
     string to_name(uint id);
+
+    void init();
 }
 
 struct Inst : Node<Inst> {

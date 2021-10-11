@@ -44,6 +44,16 @@ struct List {
             front = before_u;
     }
 
+    void insert_after(T *u, T *after_u) {
+        after_u->prev = u;
+        after_u->next = u->next;
+        if (u->next)
+            u->next->prev = after_u;
+        u->next = after_u;
+        if (back == u)
+            back = after_u;
+    }
+
     void erase(T *u) {
         if (u->prev)
             u->prev->next = u->next;

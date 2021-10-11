@@ -27,7 +27,7 @@ struct Builder {
     Operand ensure_reg(Operand x) {
         asserts(x.kind != Operand::Void);
         if (x.kind == Operand::Const)
-            return move_to_reg(x);
+            return x.val ? move_to_reg(x) : Operand::make_pinned(0);
         return x;
     }
 
@@ -67,7 +67,7 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
     if (mach_res.kind != Operand::Void)
         return mach_res;
 
-    // load from old_sp + 4 * (stack_size + pos - 4)
+    // load from sp + 4 * (stack_size + pos - 4)
     auto dst = ctx->make_vreg();
     auto *load = ctx->push(new mips::LoadInst{dst, Operand::make_pinned(Regs::sp), int(pos)});
     // TODO: fix this
@@ -412,10 +412,10 @@ Operand ir::GEPInst::build(mips::Builder *ctx) {
 Operand ir::AllocaInst::build(mips::Builder *ctx) {
     auto dst = ctx->make_vreg();
     auto *add = ctx->new_binary(mips::BinaryInst::Add, dst,
-                    Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->stack_size)));
+                    Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->spill_num)));
     // TODO: fix with max_call_arg_num
     ctx->func->allocas.push_back(add);
-    ++ctx->func->stack_size;
+    ++ctx->func->spill_num;
     return dst;
 }
 
@@ -526,6 +526,12 @@ Prog build_mr(ir::Prog &ir) {
                     }
                 } else
                     break;
+            }
+
+            for (auto *x: func->allocas) {
+                asserts(x->rhs.is_const());
+                // TODO: what if overflows imm?
+                x->rhs.val += int((func->max_call_arg_num + uint(x->rhs.val)) << 2);
             }
         }
     }

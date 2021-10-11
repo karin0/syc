@@ -37,6 +37,8 @@ struct Operand {
 
     bool is_uncolored() const;
     bool is_pinned() const;
+    bool is_virtual() const;
+    bool is_machine() const;
 
     bool operator < (const Operand &rhs) const;
     bool operator == (const Operand &rhs) const;

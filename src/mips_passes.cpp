@@ -10,5 +10,6 @@ static void run(void (*p)(Func *), Prog &prog) {
 }
 
 void run_mips_passes(mips::Prog &prog) {
+    Regs::init();
     run(reg_alloc, prog);
 }

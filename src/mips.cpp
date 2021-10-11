@@ -39,6 +39,15 @@ string to_name(uint i) {
     return r;
 }
 
+std::array<uint, 32> inv_allocatable;
+
+void init() {
+    std::fill(inv_allocatable.begin(), inv_allocatable.end(), -1u);
+    uint n = allocatable.size();
+    for (uint i = 0; i < n; ++i)
+        inv_allocatable[allocatable[i]] = i;
+}
+
 }
 
 bool is_imm(int x) {
@@ -117,6 +126,14 @@ bool Operand::is_uncolored() const {
 
 bool Operand::is_pinned() const {
     return kind == Pinned;
+}
+
+bool Operand::is_virtual() const {
+    return kind == Virtual;
+}
+
+bool Operand::is_machine() const {
+    return kind == Machine;
 }
 
 bool Operand::operator < (const Operand &rhs) const {

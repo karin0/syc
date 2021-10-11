@@ -1,19 +1,22 @@
 #include "use_def.hpp"
 #include <algorithm>
+#include <bitset>
 
 using namespace mips;
 using std::set;
 using std::unordered_map;
 
 static void remove_colored(vector<Reg> &v) {
-    auto pred = [](Operand &x) { return !x.is_uncolored(); };
+    auto pred = [](Operand &x) {
+        return !(x.is_virtual() || (x.is_pinned() && Regs::inv_allocatable[x.val] < 32));
+    };
     v.erase(std::remove_if(v.begin(), v.end(), pred), v.end());
     for (auto &x: v)
         asserts(x.is_uncolored());
 }
 
-static std::pair<vector<Reg>, vector<Reg>> get_use_def_uncolored(Inst *i, Func *f) {
-    auto r = get_use_def(i, f);
+static std::pair<vector<Reg>, vector<Reg>> get_def_use_uncolored(Inst *i, Func *f) {
+    auto r = get_def_use(i, f);
     remove_colored(r.first);
     remove_colored(r.second);
     return r;
@@ -26,10 +29,10 @@ static void liveness_analysis(Func *f) {
         bb->live_out.clear();
 
         FOR_MINST (i, *bb) {
-            auto use_def = get_use_def(i, f);
-            for (auto &x: use_def.first) if (!bb->def.count(x))
+            auto use_def = get_def_use_uncolored(i, f);
+            for (auto &x: use_def.second) if (!bb->def.count(x))
                 bb->use.insert(x);
-            for (auto &x: use_def.second) if (!bb->use.count(x))
+            for (auto &x: use_def.first) if (!bb->use.count(x))
                 bb->def.insert(x);
         }
 
@@ -66,11 +69,11 @@ constexpr uint K = Regs::allocatable.size();
 
 struct Node {
     Operand reg;
-    uint degree = 0, color;
+    uint degree = 0, color = 0x7f;
     Node *alias;
     std::set<Node *> adj_list;
     std::set<MoveInst *> move_list;  // TODO: why use a set?
-    bool colored;  // colored_nodes
+    bool colored = false;  // colored_nodes
 };
 
 template <class T>
@@ -101,7 +104,15 @@ struct Allocater {
         func = f;
     }
 
+    Node *get_node(Operand r) {
+        auto &u = nodes[r];
+        u.reg = r;
+        return &u;
+    }
+
     static void add_edge(Node *u, Node *v) {
+        asserts(u->reg.is_uncolored());
+        asserts(v->reg.is_uncolored());
         if (u == v || u->adj_list.count(v))
             return;
         u->adj_list.insert(v);
@@ -119,20 +130,21 @@ struct Allocater {
                 if_a (MoveInst, x, i) if (x->src.is_reg()) {
                     x->active = false;  // initialize active_moves
                     live.erase(x->src);
-                    nodes[x->src].move_list.insert(x);
-                    nodes[x->dst].move_list.insert(x);
+                    get_node(x->src)->move_list.insert(x);
+                    get_node(x->dst)->move_list.insert(x);
                     wl_moves.insert(x);
                 }
-                auto use_def = get_use_def(i, func);
-                auto &def = use_def.second;
+                auto def_use = get_def_use_uncolored(i, func);
+                auto &def = def_use.first;
+                auto &use = def_use.second;
                 for (auto &d: def)
                     live.insert(d);
                 for (auto &d: def)
                     for (auto &l: live)
-                        add_edge(&nodes[l], &nodes[d]);
+                        add_edge(get_node(l), get_node(d));
                 for (auto &d: def)
                     live.erase(d);
-                for (auto &u: use_def.first)
+                for (auto &u: use)
                     live.insert(u);
             }
         }
@@ -165,7 +177,7 @@ struct Allocater {
 
     void make_wl() {
         for (uint i = 0; i < func->vreg_cnt; ++i) {
-            auto &u = nodes[Reg::make_virtual(i)]; // TODO: initial
+            auto &u = *get_node(Reg::make_virtual(i)); // TODO: initial
             if (u.degree >= K)
                 spill_wl.insert(&u);
             else if (move_related(&u))
@@ -303,8 +315,10 @@ struct Allocater {
     }
 
     void select_spill() {
+        // TODO: what if a pinned node is spilled?
         auto it = spill_wl.begin(); // TODO
         auto *u = *it;
+        asserts(u->reg.is_virtual());
         spill_wl.erase(it);
         simplify_wl.insert(u);
         freeze_moves(u);
@@ -314,22 +328,28 @@ struct Allocater {
         while (!select_stack.empty()) {
             auto *u = select_stack.back();
             select_stack.pop_back();
-            bool ok_colors[K];
-            uint siz = K;
-            std::fill(ok_colors, ok_colors + K, true);
+            // bool ok_colors[K];
+            std::bitset<K> ok_colors;
+            // std::fill(ok_colors, ok_colors + K, true);
+            ok_colors.set();
             for (auto *v: u->adj_list) {
                 auto *va = get_alias(v);
-                if (va->reg.is_pinned() || v->colored) {  // todo: real color?
-                    siz -= ok_colors[va->color];  // FIXME: is_pinned and color is what?
-                    ok_colors[va->color] = false;
-                }
-                if (va->reg.kind == Reg::Machine)
-                    fatal("????");
+                asserts(va->reg.is_uncolored());
+                uint c;
+                if (va->reg.is_pinned())
+                    c = Regs::inv_allocatable[va->reg.val];
+                else if (v->colored)
+                    c = va->color;
+                else
+                    continue;  // todo: real color?
+                ok_colors.reset(c);
+                // ok_colors[c] = false;
             }
-            if (siz) {
+            if (ok_colors.count()) {
                 u->colored = true;
                 u->color = K;
-                for (uint i = 0; i < K; ++i) if (ok_colors[i]) {
+                // TODO: log color
+                for (uint i = 0; i < K; ++i) if (ok_colors.test(i)) {
                     u->color = i;
                     break;
                 }
@@ -338,29 +358,86 @@ struct Allocater {
             } else
                 spilled_nodes.insert(u);
         }
+
         for (auto *u: coalesced_nodes)
             u->color = get_alias(u)->color;
+
         FOR_MBB_MINST (i, bb, *func) {
             for (auto *x: get_owned_regs(i)) {
-                auto it = nodes.find(*x);  // TODO: precolored?
+                auto it = nodes.find(*x);  // TODO: what if precolored?
                 if (it != nodes.end()) {
                     auto &u = it->second;
-                    if (u.colored) {
+                    if (x->is_pinned())
+                        x->kind = Reg::Machine;
+                    else if (u.colored)
                         *x = Reg::make_machine(Regs::allocatable[u.color]);
-                        info("filling %u", u.color);
-                    }
                 }
             }
         }
     }
 
     void rewrite_program() {
-        // TODO
+        for (auto &u: spilled_nodes)
+            spill(u->reg);
+    }
+
+    void spill(Reg r) const {
+        FOR_MBB (bb, *func) {
+            Inst *first_use = nullptr, *last_def = nullptr;
+            Operand spiller;
+            auto cp = [&]() {
+                if (first_use) {
+                    asserts(spiller.is_virtual());
+                    bb->insts.insert(first_use, new LoadInst{
+                        spiller, Reg::make_pinned(Regs::sp),
+                        int((func->max_call_arg_num + func->spill_num) << 2)
+                    });
+                    first_use = nullptr;
+                }
+                if (last_def) {
+                    asserts(spiller.is_virtual());
+                    bb->insts.insert_after(last_def, new StoreInst{
+                        spiller, Reg::make_pinned(Regs::sp),
+                        int((func->max_call_arg_num + func->spill_num) << 2)
+                    });
+                    last_def = nullptr;
+                }
+                spiller.kind = Operand::Void;
+            };
+            int cnt = 0;
+            FOR_MINST (i, *bb) {
+                auto def_use = get_owned_def_use(i);
+                auto *def = def_use.first;
+                if (def && *def == r) {
+                    if (spiller.is_void())
+                        spiller = func->make_vreg();
+                    *def = spiller;
+                    last_def = i;
+                }
+                for (auto *use: def_use.second) if (*use == r) {
+                    if (spiller.is_void())
+                        spiller = func->make_vreg();
+                    *use = spiller;
+                    if (!first_use && !last_def)
+                        first_use = i;
+                }
+                if (cnt++ > 30) {
+                    cp();
+                    // TODO: cnt = 0 ?
+                }
+            }
+            cp();
+        }
+        ++func->spill_num;
     }
 
     void run() {
         while (true) {
             liveness_analysis(func);
+
+            for (uint i = 0; i < K; ++i)
+                get_node(Reg::make_pinned(i))->degree = 0x7fffffff;
+
             // TODO: init degrees
             build();
             make_wl();
@@ -378,6 +455,7 @@ struct Allocater {
             if (spilled_nodes.empty())
                 return;
             rewrite_program();
+            clear();
         }
     }
 };
