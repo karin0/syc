@@ -8,6 +8,7 @@ struct Builder {
     Prog *prog;
     Func *func;
     BB *bb;
+    Operand args[MAX_ARG_REGS];
 
     Inst *push_point = nullptr;  // used by build_val for phi nodes only, make new pushed insts before the point
 
@@ -64,7 +65,9 @@ Operand ir::Global::build_val(mips::Builder *) {
 }
 
 Operand ir::Argument::build_val(mips::Builder *ctx) {
-    if (mach_res.kind != Operand::Void)
+    if (pos < MAX_ARG_REGS)
+        return ctx->args[pos];
+    if (!mach_res.is_void())
         return mach_res;
 
     // load from sp + 4 * (stack_size + pos - 4)
@@ -74,7 +77,7 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
     ctx->func->arg_loads.push_back(load);
     // TODO: load every time or only once?
 
-    return dst;
+    return mach_res = dst;
 }
 
 Operand ir::Undef::build_val(mips::Builder *) {
@@ -292,7 +295,10 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
         if (i < MAX_ARG_REGS)
             ctx->push(new MoveInst{Operand::make_pinned(Regs::a0 + i), arg});
         else
-            ctx->push(new mips::StoreInst{ctx->ensure_reg(arg), Operand::make_pinned(Regs::sp), int((i - 4) * 4)});
+            ctx->push(new mips::StoreInst{
+                ctx->ensure_reg(arg), Operand::make_pinned(Regs::sp),
+                int((i - MAX_ARG_REGS) * 4)
+            });
             // sw to sp + (i-4) * 4
     }
     ctx->push(new mips::CallInst{func});
@@ -353,7 +359,7 @@ Operand ir::LoadInst::build(mips::Builder *ctx) {
         auto ot = ctx->make_vreg();
         ctx->push(new ShiftInst{ShiftInst::Ll, ot, off, 2});  // TODO: opti
         if (base.kind == Operand::Const) {
-            ctx->push(new LoadInst{dst, off, base.val});
+            ctx->push(new LoadInst{dst, ot, base.val});
             // MARS will do the trick when imm overflows
             // To allocate $at, we must do it explicitly
         } else {
@@ -380,7 +386,7 @@ Operand ir::StoreInst::build(mips::Builder *ctx) {
         auto ot = ctx->make_vreg();
         ctx->push(new ShiftInst{ShiftInst::Ll, ot, off, 2});
         if (base.kind == Operand::Const)
-            ctx->push(new StoreInst{src, off, base.val});
+            ctx->push(new StoreInst{src, ot, base.val});
         else {
             auto at = ctx->make_vreg();
             ctx->push(new BinaryInst{BinaryInst::Add, at, base, ot});
@@ -412,24 +418,27 @@ Operand ir::GEPInst::build(mips::Builder *ctx) {
 Operand ir::AllocaInst::build(mips::Builder *ctx) {
     auto dst = ctx->make_vreg();
     auto *add = ctx->new_binary(mips::BinaryInst::Add, dst,
-                    Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->spill_num)));
+                    Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
+    infof("alloca val", add->rhs.val);
+    // TODO: siz?
     // TODO: fix with max_call_arg_num
     ctx->func->allocas.push_back(add);
-    ++ctx->func->spill_num;
+    ctx->func->alloca_num += var->size();
     return dst;
 }
 
 Operand ir::PhiInst::build(mips::Builder *ctx) {
-    // TODO
     return ctx->make_vreg();
 }
 
 Prog build_mr(ir::Prog &ir) {
     Prog res{&ir};
 
-    uint data = 0;  // TODO: check it in MARS
+    uint data = 0x10010000;
+    // TODO: big data base address affects global access
     // TODO: remove unused globs before this
     for (auto *glob: ir.globals) {
+        infof("addr of", glob->name, "is", data);
         glob->addr = data;
         data += glob->size() << 2;
     }
@@ -451,9 +460,8 @@ Prog build_mr(ir::Prog &ir) {
             auto src = Operand::make_pinned(Regs::a0 + i);
             auto dst = func->make_vreg();
             bb_start->push(new MoveInst{dst, src});
-            auto *value = fun.params[i]->value;
-            if (value)  // Argument, instead of removed Alloca
-                fun.params[i]->value->mach_res = dst;
+            // auto *value = fun.params[i]->value;  Argument, or removed Alloca
+            ctx.args[i] = dst;
         }
 
         ctx.func = func;
@@ -495,43 +503,9 @@ Prog build_mr(ir::Prog &ir) {
                         }
                         if (!br && bb->prev == ubb)  // prev != ubb when branch to bb is removed during codegen
                             ubb->push(new MoveInst{t, uv->build_val(&ctx)});
-
-                        /*
-                        if (bb->prev == ubb) {
-                            ctx.bb = ubb;
-                            ubb->push(new MoveInst{t, uv->build_val(&ctx)});
-                            // TODO: Is this right? why not branch to the next bb earlier to skip the remaining insts?
-                            // Due to this, a bb may not ends with a branch/jump/return
-                            // Not sure if any passes requires this
-                            // Maybe we should simply find the first inst that branches to the current bb
-                        } else {
-                            // FIXME: after inserting moves, we can't start finding from the back.
-                            mips::Inst *br = nullptr;
-                            info("phi in bb_%d, arg from bb_%d", ibb->id, u.second->id);
-                            for (auto *j = ubb->insts.back; j; j = j->prev) {
-                                if_a (mips::ControlInst, y, j) {
-                                    info("got br to mbb_%u", y->to->id);
-                                    if (y->to == bb)
-                                        br = y;
-                                } else
-                                    break;
-                            }
-                            asserts(br);
-                            ctx.bb = ubb;
-                            ctx.push_point = br;
-                            ctx.push(new MoveInst{t, uv->build_val(&ctx)});
-                            ctx.push_point = nullptr;
-                        }
-                        */
                     }
                 } else
                     break;
-            }
-
-            for (auto *x: func->allocas) {
-                asserts(x->rhs.is_const());
-                // TODO: what if overflows imm?
-                x->rhs.val += int((func->max_call_arg_num + uint(x->rhs.val)) << 2);
             }
         }
     }

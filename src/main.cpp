@@ -5,6 +5,7 @@
 #include "passes.hpp"
 #include "mips_builder.hpp"
 
+#include <iostream>
 #include <fstream>
 #include <cstring>
 #include <cerrno>
@@ -82,6 +83,7 @@ int main() {
     run_mips_passes(mr);
     {
         std::ofstream mrf("mr2.asm");
+        std::cout << mr;
         mrf << mr;
     }
 

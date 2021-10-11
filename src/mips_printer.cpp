@@ -1,4 +1,5 @@
 #include "mips.hpp"
+#include <ostream>
 
 namespace mips {
 
@@ -17,8 +18,6 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
             os << "V";
             break;
         case Operand::Pinned:
-            os << 'P' << Regs::to_name(x.val);
-            return os;
         case Operand::Machine:
             os << '$' << Regs::to_name(x.val);
             return os;
@@ -31,15 +30,19 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
     return os;
 }
 
-#define STR_PRE "__str_"
+#define END_LABEL "__END"
+#define GLOB_PRE "__GLO_"
+#define STR_PRE "__STR_"
+#define FUNC_PRE "__FUN_"
 #define INDENT "    "
 
 std::ostream &operator << (std::ostream &os, const Prog &prog) {
     os << ".data\n";
     for (auto &g: prog.ir->globals) {
-        os << INDENT << g->name << ": ";
+        os << INDENT GLOB_PRE << g->name << ": ";
         if (g->has_init) {
             os << ".word";
+            asserts(g->init.empty() || g->init.size() == g->size());
             for (auto x: g->init) {
                 if_a (ast::Number, n, x)
                     os << ' ' << n->val;
@@ -62,9 +65,28 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     delete []strs;
 
     os << "\n.text\n";
-    for (auto &f : prog.funcs) {
+
+    for (auto &f : prog.funcs) if (f.is_main) {
         func_now = &f;
-        os << f.ir->name << ":\n";
+        os << FUNC_PRE "main:\n";
+        FOR_MBB (bb, f) {
+            os << *bb << ":\n";
+            FOR_MINST (i, *bb) {
+                os << INDENT;
+                if (is_a<ReturnInst>(i)) {
+                    if (i->next || bb->next || prog.funcs.size() > 1)
+                        os << "j " END_LABEL;
+                } else
+                    i->print(os);
+                os << '\n';
+            }
+        }
+        break;
+    }
+
+    for (auto &f : prog.funcs) if (!f.is_main) {
+        func_now = &f;
+        os << FUNC_PRE << f.ir->name << ":\n";
         FOR_MBB (bb, f) {
             os << *bb << ":\n";
             FOR_MINST (i, *bb) {
@@ -74,6 +96,8 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
             }
         }
     }
+    os << END_LABEL << ":\n";
+    func_now = nullptr;
     return os;
 }
 
@@ -90,7 +114,7 @@ const char *bin_name_r(BinaryInst::Op op) {
         case BinaryInst::Xor:
             return "xor";
         default:
-            fatal("unknown binary r-inst");
+            unreachable();
     }
 }
 
@@ -105,7 +129,7 @@ const char *bin_name_i(BinaryInst::Op op) {
         case BinaryInst::Xor:
             return "xori";
         default:
-            fatal("unknown binary i-inst");
+            unreachable();
     }
 }
 
@@ -168,7 +192,7 @@ void MFLoInst::print(std::ostream &os) const {
 }
 
 void CallInst::print(std::ostream &os) const {
-    os << "jal " << func->name;
+    os << "jal " FUNC_PRE << func->name;
 }
 
 void BranchInst::print(std::ostream &os) const {

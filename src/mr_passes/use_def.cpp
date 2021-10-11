@@ -121,3 +121,21 @@ std::pair<Reg *, vector<Reg *>> get_owned_def_use(Inst *i) {
         return {&x->dst, {}};
     return {{}, {}};
 }
+
+vector<Reg> get_def(Inst *i) {
+    if_a (BinaryInst, x, i)
+        return {x->dst};
+    else if_a (ShiftInst, x, i)
+        return {x->dst};
+    else if_a (MoveInst, x, i)
+        return {x->dst};
+    else if_a (MFHiInst, x, i)
+        return {x->dst};
+    else if_a (MFLoInst, x, i)
+        return {x->dst};
+    else if_a (LoadInst, x, i)
+        return {x->dst};
+    else if_a (LoadStrInst, x, i)
+        return {x->dst};
+    return {};
+}

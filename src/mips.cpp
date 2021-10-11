@@ -48,13 +48,17 @@ void init() {
         inv_allocatable[allocatable[i]] = i;
 }
 
+bool is_s(Reg r) {
+    return r.is_physical() && uint(r.val) >= s0 && uint(r.val) <= s7;
+}
+
 }
 
 bool is_imm(int x) {
     return -32768 <= x && x <= 32767;
 }
 
-Func::Func(ir::Func *ir) : ir(ir) {}
+Func::Func(ir::Func *ir) : ir(ir), is_main(ir->name == "main") {}
 
 BB *Func::new_bb() {
     auto *bb = new BB;
@@ -132,8 +136,13 @@ bool Operand::is_virtual() const {
     return kind == Virtual;
 }
 
-bool Operand::is_machine() const {
-    return kind == Machine;
+bool Operand::is_physical() const {
+    return kind == Machine || kind == Pinned;
+}
+
+bool Operand::equiv(const Operand &rhs) const {
+    return (is_physical() && rhs.is_physical() && val == rhs.val) ||
+        (is_virtual() && rhs.is_virtual() && val == rhs.val);
 }
 
 bool Operand::operator < (const Operand &rhs) const {

@@ -14,7 +14,7 @@ template <typename T>
 struct List {
     T *front = nullptr, *back = nullptr;
 
-    void push(T *u) {
+    T *push(T *u) {
         u->prev = back;
         u->next = nullptr;
         if (back) {
@@ -22,9 +22,10 @@ struct List {
             back = u;
         } else
             front = back = u;
+        return u;
     }
 
-    void push_front(T *u) {
+    T *push_front(T *u) {
         u->prev = nullptr;
         u->next = front;
         if (front) {
@@ -32,9 +33,10 @@ struct List {
             front = u;
         } else
             front = back = u;
+        return u;
     }
 
-    void insert(T *u, T *before_u) {
+    T *insert(T *u, T *before_u) {
         before_u->next = u;
         before_u->prev = u->prev;
         if (u->prev)
@@ -42,9 +44,10 @@ struct List {
         u->prev = before_u;
         if (front == u)
             front = before_u;
+        return before_u;
     }
 
-    void insert_after(T *u, T *after_u) {
+    T *insert_after(T *u, T *after_u) {
         after_u->prev = u;
         after_u->next = u->next;
         if (u->next)
@@ -52,6 +55,7 @@ struct List {
         u->next = after_u;
         if (back == u)
             back = after_u;
+        return after_u;
     }
 
     void erase(T *u) {
@@ -64,6 +68,19 @@ struct List {
             u->next->prev = u->prev;
         else
             back = u->prev;
+    }
+
+    void replace(const T *o, T *n) {
+        n->prev = o->prev;
+        n->next = o->next;
+        if (n->prev)
+            n->prev->next = n;
+        if (n->next)
+            n->next->prev = n;
+        if (front == o)
+            front = n;
+        if (back == o)
+            back = n;
     }
 
     bool empty() const {

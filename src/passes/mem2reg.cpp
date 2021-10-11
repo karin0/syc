@@ -20,6 +20,20 @@ void build_dom(Func *f) {
         FOR_BB (u, *f)
             u->vis = false;
 
+        traverse(f->bbs.front, nullptr);
+        for (auto *u = f->bbs.front; u; ) {
+            auto *next = u->next;
+            if (!u->vis) {
+                warnf("found unreachable bb", u->id);
+                f->bbs.erase(u);
+                // TODO: delete
+            }
+            u = next;
+        }
+
+        FOR_BB (u, *f)
+            u->vis = false;
+
         traverse(f->bbs.front, w);
         FOR_BB (u, *f) if (!u->vis) {
             u->dom.insert(w);
@@ -62,6 +76,8 @@ void build_df(Func *f) {
             for (; p != u->idom; p = p->idom) {
                 p->df.push_back(u);
                 info("%s: bb_%d has bb_%d as df", f->name.data(), p->id, u->id);
+                if (p->idom && p->idom->idom == p)
+                    fatal("");
             }
         }
     }
@@ -105,6 +121,7 @@ void mem2reg(Func *f) {
                 auto *u = wl.back();
                 wl.pop_back();
                 for (BB *v : u->df) if (!v->vis) {
+                    infof("alloca", i, "put phi at bb", v->id, "which is in df of bb", u->id);
                     wl.push_back(v);
                     v->vis = true;
                     v->push_front(new PhiInst)->aid = int(i);

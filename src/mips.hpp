@@ -58,12 +58,14 @@ struct Func {
     vector<LoadInst *> arg_loads;
     vector<BinaryInst *> allocas;
     uint max_call_arg_num = 0;
-    uint spill_num = 0;  // without 4; spill & allocas (arrays)
+    uint spill_num = 0;  // without 4
+    uint alloca_num = 0;  // sum of array lengths
+    bool is_main;
 
     explicit Func(ir::Func *ir);
 
     BB *new_bb();
-    Operand make_vreg();
+    Reg make_vreg();
 };
 
 #define FOR_MBB(bb, f) FOR_LIST(mips::BB, bb, (f).bbs)
@@ -102,8 +104,9 @@ $ra	$31	return address	N/A
 */
 
 namespace Regs {
-    constexpr uint v0 = 2, v1 = 3, a0 = 4, t0 = 8, s0 = 16, t8 = 24, t9 = 25,
-        gp = 28, sp = 29, fp = 30, ra = 31;
+
+    constexpr uint v0 = 2, v1 = 3, a0 = 4, t0 = 8, s0 = 16, s7 = 23,
+        t8 = 24, t9 = 25, gp = 28, sp = 29, fp = 30, ra = 31;
 
     constexpr std::array<uint, 16> caller_saved{
         v0, v1,
@@ -119,23 +122,25 @@ namespace Regs {
     };
 
     constexpr std::array<uint, 24> allocatable{
-        v0, v1,
-        a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
         t8, t9,
+        v0, v1,
+        a0,  5,  6,  7,
         s0, 17, 18, 19, 20,
         21, 22, 23
     };
 
     extern std::array<uint, 32> inv_allocatable;
 
-    string to_name(uint id);
-
     void init();
+    string to_name(uint id);
+    bool is_s(Reg x);
+
 }
 
 struct Inst : Node<Inst> {
+    virtual ~Inst() = default;
     virtual void print(std::ostream &) const = 0;
 };
 
