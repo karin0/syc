@@ -13,10 +13,10 @@ void run_mips_passes(mips::Prog &prog) {
     };
 
     Regs::init();
-    // run(move_coalesce);
+    run(move_coalesce);  // preserve arg_loads & allocas
     run(reg_alloc);
     run(reg_restore);
-    run(move_coalesce);  // TODO: this breaks insts to fix later ... but we need it before alloc to turn gep adds to moves
+    run(move_coalesce);
 
     // TODO: movz, movn; reduce syscall lis; alloc sp
 }

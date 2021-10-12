@@ -17,20 +17,12 @@ void reg_restore(Func *f) {
             s_regs.insert(Regs::ra);
     }
 
-    auto stack_size = (f->max_call_arg_num + f->alloca_num + f->spill_num + s_regs.size()) << 2;
-    info("%s has stack size %u (%u args, %u allocas, %u spills, %u s-regs)",
+    uint stack_size = (f->max_call_arg_num + f->alloca_num + f->spill_num + s_regs.size()) << 2;
+    std::fprintf(stderr, "%s has stack size %u (%u args, %u allocas, %u spills, %zu s-regs)\n",
          f->ir->name.data(), stack_size, f->max_call_arg_num, f->alloca_num, f->spill_num, s_regs.size());
 
-    for (auto *x: f->allocas) {
-        asserts(x->rhs.is_const());
-        // TODO: what if imm overflows?
-        infof("fixing", f->ir->name, "idx =", x->rhs.val);
-        x->rhs.val = int((f->max_call_arg_num + uint(x->rhs.val)) << 2);
-        infof("now val =", x->rhs.val);
-    }
-
     for (auto *i: f->arg_loads)
-        i->off = int(stack_size + ((i->off - MAX_ARG_REGS) << 2));
+        i->off = int(stack_size + ((i->off - MAX_ARG_REGS) << 2));  // move_coal won't break this
 
     if (!stack_size)
         return;

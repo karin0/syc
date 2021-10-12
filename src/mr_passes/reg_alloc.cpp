@@ -116,7 +116,7 @@ struct Allocater {
     static void add_edge(Node *u, Node *v) {
         asserts(u->reg.is_uncolored());
         asserts(v->reg.is_uncolored());
-        // asserts(u->reg.is_virtual() || v->reg.is_virtual());  // todo ????????
+        // asserts(u->reg.is_virtual() || v->reg.is_virtual());
         // TODO: adj_set
         if (u == v || u->adj_list.count(v))
             return;
@@ -170,7 +170,7 @@ struct Allocater {
                 std::find(select_stack.begin(), select_stack.end(), x) == select_stack.end() &&
                 !coalesced_nodes.count(x)
             )
-                r.insert(x); //, infof("including", x->reg, "in adj of", u->reg); // TODO: woshishabi
+                r.insert(x); //, infof("including", x->reg, "in adj of", u->reg);
             // else
             //     infof("omitting", x->reg, "in adj of", u->reg);
         return r;
@@ -192,7 +192,7 @@ struct Allocater {
     }
 
     void make_wl() {
-        for (uint i = 0; i < func->vreg_cnt; ++i) { // TODO: initial
+        for (uint i = 0; i < func->vreg_cnt; ++i) {
             auto it = nodes.find(Reg::make_virtual(i));
             if (it == nodes.end())
                 continue;
@@ -468,6 +468,7 @@ struct Allocater {
                 if (cnt++ > 30) {
                     cp();
                     // TODO: cnt = 0 ?
+                    cnt = 0;
                 }
             }
             cp();
@@ -489,7 +490,7 @@ struct Allocater {
                 info("reg alloc inner loop");
                 if (!simplify_wl.empty())
                     simplify();
-                else if (!wl_moves.empty())  // todo: else?
+                else if (!wl_moves.empty())
                     coalesce();
                 else if (!freeze_wl.empty())
                     freeze();
@@ -507,8 +508,6 @@ struct Allocater {
 
 }
 
-// TODO: remove identity binaries before this
-// TODO: why not t*?
 void reg_alloc(Func *f) {
     reg_allocater::Allocater{f}.run();
 }

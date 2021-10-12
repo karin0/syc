@@ -1,23 +1,29 @@
 #pragma once
 
+#include <stdexcept>
+
 #ifdef SYC_LOG
 
 #include <vector>
 #include <iostream>
-#include <ctime>
 
 void put_log_prompt(const char *level);
+
+extern char log_sbuf[1024];
 
 template <typename... Args>
 void log(const char *level, const char *fn, const char *suf, const char *fmt, const Args&... args) {
     put_log_prompt(level);
-
-    // TODO: use a static buffer
-    std::size_t n = 1 + std::snprintf(nullptr, 0, fmt, args...);
-    std::vector<char> buf(n);
-    std::snprintf(buf.data(), n, fmt, args...);
-
-    std::cerr << buf.data() << " (" << fn << suf << std::endl;
+    int r = std::snprintf(log_sbuf, sizeof log_sbuf, fmt, args...);
+    if (r >= 0 && std::size_t(r) < sizeof log_sbuf)
+        std::cerr << log_sbuf;
+    else {
+        std::size_t n = 1 + std::snprintf(nullptr, 0, fmt, args...);
+        std::vector<char> buf(n);
+        std::snprintf(buf.data(), n, fmt, args...);
+        std::cerr << buf.data();
+    }
+    std::cerr << " (" << fn << suf << std::endl;
 }
 
 #define STRINGIZE(x) STRINGIZE2(x)
@@ -31,26 +37,7 @@ void log(const char *level, const char *fn, const char *suf, const char *fmt, co
 #define info(...) LOGS("INFO") __VA_ARGS__)
 #define debug(...) LOGS("DEBUG") __VA_ARGS__)
 #define trace(...) LOGS("TRACE") __VA_ARGS__)
-#define fatal(...)  do { LOGS("FATAL") __VA_ARGS__); throw std::runtime_error("fatal error"); } while (0)
-#define asserts(cond) do { if (!(cond)) { fatal("assertion failed: %s", STRINGIZE(cond)); } } while (0)
-
-/*
-struct LogStream {
-    const char *suf;
-
-    template <class T>
-    const LogStream &operator << (T &x) const {
-        std::cerr << x;
-        return *this;
-    }
-
-    ~LogStream() {
-        std::cerr << suf;
-    }
-};
-
-void make_log_stream(const char *level);
-*/
+#define fatal(...)  do { LOGS("FATAL") __VA_ARGS__); throw std::runtime_error{"fatal error"}; } while (0)
 
 template <typename T>
 void log_all(const T &x) {
@@ -84,8 +71,7 @@ void logf(const char *level, const char *fn, const char *suf, const Args&... arg
 #define info(...)   void(0)
 #define debug(...)  void(0)
 #define trace(...)  void(0)
-#define fatal(msg, ...) (throw msg)
-#define asserts(...) void(0)
+#define fatal(msg, ...) (throw std::runtime_error{(msg)})
 
 #define errorf(...) void(0)
 #define warnf(...) void(0)
@@ -93,6 +79,12 @@ void logf(const char *level, const char *fn, const char *suf, const Args&... arg
 #define debugf(...) void(0)
 #define tracef(...) void(0)
 
+#endif
+
+#ifdef SYC_ASSERTS
+void asserts(bool cond);
+#else
+#define asserts(...) void(0)
 #endif
 
 #define unreachable() fatal("unreachable")

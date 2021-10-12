@@ -42,7 +42,8 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
         os << INDENT GLOB_PRE << g->name << ": ";
         if (g->has_init) {
             os << ".word";
-            asserts(g->init.empty() || g->init.size() == g->size());
+            if (!(g->init.empty() || g->init.size() == g->size()))
+                fatal("illegal initializer list for %s", g->name.data());
             for (auto x: g->init) {
                 if_a (ast::Number, n, x)
                     os << ' ' << n->val;

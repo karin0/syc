@@ -35,27 +35,27 @@ Value *Use::release() {
     return r;
 }
 
+Value::~Value() {
+    // replace_uses(nullptr)
+    FOR_LIST (Use, u, uses)
+        u->value = nullptr;
+}
+
 void Value::add_use(Use *u) {
-    // info("adding use %p, val = %p", u, this);
     uses.push(u);
 }
 
 void Value::kill_use(Use *u) {
-    // info("killing use %p, val = %p", u, this);
     uses.erase(u);
 }
 
-void Value::replace(Value *n) const {
+void Value::replace_uses(Value *n) {
+    asserts(n != this);
     while (uses.front)
         uses.front->set(n);
 }
 
 void BB::erase(Inst *i) {
-    insts.erase(i);
-}
-
-void BB::erase_with(Inst *i, Value *n) {
-    i->replace(n);
     insts.erase(i);
 }
 
@@ -76,10 +76,10 @@ void Func::push_bb(BB *bb) {
     bbs.push(bb);
 }
 
-GetIntFunc::GetIntFunc() : Func(true, {}, "getint?") {}
+GetIntFunc::GetIntFunc() : Func(true, {}, "sys_getint") {}
 
 PrintfFunc::PrintfFunc(const char *fmt, std::size_t len) :
-    Func(false, {}, "printf?"), fmt(fmt), len(len) {}
+    Func(false, {}, "sys_printf"), fmt(fmt), len(len) {}
 
 Const::Const(int val) : val(val) {}
 
@@ -146,15 +146,16 @@ vector<BB *> BB::get_succ() const {
         return {x->bb_to};
     if (as_a<ReturnInst>(i))
         return {};
-    fatal("bb_%d (%p) ends with non-branch inst %p", id, this, i);
+    unreachable();
 }
 
+// TODO: add others
 bool Inst::is_pure() const {
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
             || is_a<PhiInst>(this);
 }
 
-bool Inst::is_branch() const {
+bool Inst::is_control() const {
     return is_a<BranchInst>(this) || is_a<JumpInst>(this) || is_a<ReturnInst>(this);
 }
 
@@ -175,6 +176,6 @@ int ir::eval_bin(OpKind op, int lh, int rh) {
         case Eq:  return lh == rh;
         case Ne:  return lh != rh;
         default:
-            fatal("evaluating on unexpected operator %d", op);
+            unreachable();
     }
 }

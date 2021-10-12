@@ -50,8 +50,8 @@ cmake-build-*
 *.asm
 *.zip
 *.in
-*.sh
-/cases
 
 .idea
 .vscode
+
+!/CMakeLists.txt

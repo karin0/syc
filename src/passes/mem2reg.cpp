@@ -11,26 +11,31 @@ static void traverse(BB *u, BB *block) {
 }
 
 void build_dom(Func *f) {
+    FOR_BB (u, *f)
+        u->vis = false;
+
+    traverse(f->bbs.front, nullptr);
+    for (auto *u = f->bbs.front; u; ) {
+        auto *next = u->next;
+        if (!u->vis) {
+            warnf("found unreachable bb", u->id);
+            for (auto *i = u->insts.front; i; ) {
+                auto next_i = i->next;
+                delete i;
+                i = next_i;
+            }
+            f->bbs.erase(u);
+            delete u;
+        }
+        u = next;
+    }
+
     FOR_BB (u, *f) {
         u->dom.clear();
         u->idom = nullptr;
     }
 
     FOR_BB (w, *f) {
-        FOR_BB (u, *f)
-            u->vis = false;
-
-        traverse(f->bbs.front, nullptr);
-        for (auto *u = f->bbs.front; u; ) {
-            auto *next = u->next;
-            if (!u->vis) {
-                warnf("found unreachable bb", u->id);
-                f->bbs.erase(u);
-                // TODO: delete
-            }
-            u = next;
-        }
-
         FOR_BB (u, *f)
             u->vis = false;
 
@@ -42,7 +47,6 @@ void build_dom(Func *f) {
     }
 
     FOR_BB (u, *f) {
-        // TODO: opti
         for (BB *w : u->dom) if (u != w) {
             bool ok = true;
             for (BB *v : u->dom) if (v != u && w != v && v->dom.count(w)) {
@@ -76,8 +80,6 @@ void build_df(Func *f) {
             for (; p != u->idom; p = p->idom) {
                 p->df.push_back(u);
                 info("%s: bb_%d has bb_%d as df", f->name.data(), p->id, u->id);
-                if (p->idom && p->idom->idom == p)
-                    fatal("");
             }
         }
     }
@@ -151,7 +153,8 @@ void mem2reg(Func *f) {
                 if_a (AllocaInst, a, x->base.value) {
                     if (a->aid >= 0) {
                         x->lhs->value = nullptr;  // param codegen uses this!
-                        bb->erase_with(x, vals[a->aid]);
+                        x->replace_uses(vals[a->aid]);
+                        bb->erase(x);
                         delete x;
                     }
                 }

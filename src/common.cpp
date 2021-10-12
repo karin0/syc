@@ -1,8 +1,12 @@
+#include "common.hpp"
+
 #ifdef SYC_LOG
 
-#include "common.hpp"
 #include <chrono>
 #include <iomanip>
+#include <ctime>
+
+char log_sbuf[1024];
 
 void put_log_prompt(const char *level) {
     using namespace std::chrono;
@@ -14,6 +18,15 @@ void put_log_prompt(const char *level) {
         << std::put_time(lt, "%F %T.")
         << duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000
         << level;
+}
+
+#endif
+
+#ifdef SYC_ASSERTS
+
+void asserts(bool cond) {
+    if (!cond)
+        throw std::logic_error{"assertion failed"};
 }
 
 #endif

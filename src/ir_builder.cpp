@@ -363,7 +363,7 @@ Prog build_ir(ast::Prog &&ast) {
 
         auto *bb_last = func->bbs.back;
         auto *last = bb_last->insts.back;
-        if (!last || !last->is_branch())
+        if (!last || !last->is_control())
             bb_last->push(new ReturnInst{nullptr});
     }
     return res;

@@ -3,7 +3,7 @@
 using namespace ir;
 
 void dce(Func *f) {
-    // TODO: opt; const prog; remove after j/br/ret
+    // TODO: opt; const prog
     bool changed;
     do {
         changed = false;
@@ -15,7 +15,7 @@ void dce(Func *f) {
                     bb->erase(i);
                     delete i;
                     changed = true;
-                } else if (i->is_branch())
+                } else if (i->is_control())
                     end = true;
                 i = next;
             }

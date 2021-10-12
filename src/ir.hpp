@@ -82,13 +82,13 @@ struct Value {
 
     void add_use(Use *u);
     void kill_use(Use *u);
-    void replace(Value *n) const;
+    void replace_uses(Value *n);
 
     virtual mips::Operand build_val(mips::Builder *) = 0;
 
     virtual void print_val(std::ostream &) = 0;
 
-    virtual ~Value() = default;
+    virtual ~Value();
 };
 
 struct BB : Node<BB> {
@@ -118,9 +118,6 @@ struct BB : Node<BB> {
     }
 
     void erase(Inst *i);
-
-    void erase_with(Inst *i, Value *n);
-
     vector<BB *> get_succ() const;
 };
 
@@ -219,7 +216,7 @@ struct Inst : Value, Node<Inst> {
     Inst() = default;
 
     bool is_pure() const;
-    bool is_branch() const;
+    bool is_control() const;
 
     virtual mips::Operand build(mips::Builder *) = 0;
     mips::Operand build_val(mips::Builder *) override;

@@ -73,7 +73,6 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
     // load from sp + 4 * (stack_size + pos - 4)
     auto dst = ctx->make_vreg();
     auto *load = ctx->push(new mips::LoadInst{dst, Operand::make_pinned(Regs::sp), int(pos)});
-    // TODO: fix this
     ctx->func->arg_loads.push_back(load);
     // TODO: load every time or only once?
 
@@ -435,8 +434,8 @@ Prog build_mr(ir::Prog &ir) {
     Prog res{&ir};
 
     uint data = 0x10010000;
-    // TODO: big data base address affects global access
-    // TODO: remove unused globs before this
+    // TODO: big data base address affects global access, consider using a shared base reg
+    // TODO: remove unused (and const) globs before this
     for (auto *glob: ir.globals) {
         infof("addr of", glob->name, "is", data);
         glob->addr = data;
@@ -452,7 +451,6 @@ Prog build_mr(ir::Prog &ir) {
 
         FOR_IBB (ibb, fun)
             ibb->mbb = func->new_bb();
-
 
         auto *bb_start = func->bbs.front;
         uint n = std::min(fun.params.size(), MAX_ARG_REGS);
@@ -507,6 +505,14 @@ Prog build_mr(ir::Prog &ir) {
                 } else
                     break;
             }
+        }
+
+        for (auto *x: func->allocas) {
+            asserts(x->rhs.is_const());
+            // TODO: what if imm overflows?
+            infof("fixing", func->ir->name, "idx =", x->rhs.val);
+            x->rhs.val = int((func->max_call_arg_num + uint(x->rhs.val)) << 2);
+            infof("now val =", x->rhs.val);
         }
     }
 
