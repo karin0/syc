@@ -39,17 +39,20 @@ string to_name(uint i) {
     return r;
 }
 
-std::array<uint, 32> inv_allocatable;
+uint inv_allocatable[MAX];
+static uint bm_callee_saved[MAX];
 
 void init() {
-    std::fill(inv_allocatable.begin(), inv_allocatable.end(), -1u);
+    std::fill(inv_allocatable, inv_allocatable + MAX, -1u);
     uint n = allocatable.size();
     for (uint i = 0; i < n; ++i)
         inv_allocatable[allocatable[i]] = i;
+    for (uint i: callee_saved)
+        bm_callee_saved[i] = true;
 }
 
-bool is_s(Reg r) {
-    return r.is_physical() && uint(r.val) >= s0 && uint(r.val) <= s7;
+bool is_callee_saved(Reg r) {
+    return r.is_physical() && bm_callee_saved[r.val];
 }
 
 }

@@ -105,17 +105,17 @@ Undef Undef::VAL;
 BinaryInst::BinaryInst(OpKind op, Value *lhs, Value *rhs) :
         op(op), lhs(lhs, this), rhs(rhs, this) {}
 
-AccessInst::AccessInst(Decl *lhs, Value *base, Value *idx) :
-    lhs(lhs), base(base, this), idx(idx, this) {}
+AccessInst::AccessInst(Decl *lhs, Value *base, Value *off) :
+    lhs(lhs), base(base, this), off(off, this) {}
 
-LoadInst::LoadInst(Decl *lhs, Value *base, Value *idx) :
-    AccessInst(lhs, base, idx) {}
+LoadInst::LoadInst(Decl *lhs, Value *base, Value *off) :
+    AccessInst(lhs, base, off) {}
 
-StoreInst::StoreInst(Decl *lhs, Value *base, Value *idx, Value *val) :
-    AccessInst(lhs, base, idx), val(val, this) {}
+StoreInst::StoreInst(Decl *lhs, Value *base, Value *off, Value *val) :
+    AccessInst(lhs, base, off), val(val, this) {}
 
-GEPInst::GEPInst(Decl *lhs, Value *base, Value *idx, int size) :
-    AccessInst(lhs, base, idx), size(size) {}
+GEPInst::GEPInst(Decl *lhs, Value *base, Value *off, int size) :
+    AccessInst(lhs, base, off), size(size) {}
 
 BranchInst::BranchInst(Value *cond, BB *bb_then, BB *bb_else) :
     cond(cond, this), bb_then(bb_then), bb_else(bb_else) {}

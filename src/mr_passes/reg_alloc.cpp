@@ -170,9 +170,7 @@ struct Allocater {
                 std::find(select_stack.begin(), select_stack.end(), x) == select_stack.end() &&
                 !coalesced_nodes.count(x)
             )
-                r.insert(x); //, infof("including", x->reg, "in adj of", u->reg);
-            // else
-            //     infof("omitting", x->reg, "in adj of", u->reg);
+                r.insert(x);
         return r;
     }
 

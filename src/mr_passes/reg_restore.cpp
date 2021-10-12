@@ -10,7 +10,7 @@ void reg_restore(Func *f) {
             if (is_a<CallInst>(i))
                 is_leaf = false;
             for (auto x: get_def(i))
-                if (Regs::is_s(x))
+                if (Regs::is_callee_saved(x))
                     s_regs.insert(x.val);
         }
         if (!is_leaf)

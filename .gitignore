@@ -55,3 +55,7 @@ cmake-build-*
 .vscode
 
 !/CMakeLists.txt
+
+/tests/out
+/tests/build
+*.csv

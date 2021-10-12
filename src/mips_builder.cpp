@@ -120,28 +120,44 @@ BinaryInst *new_bool(Reg dst, Reg src) {
     return new BinaryInst{BinaryInst::Ltu, dst, Operand::make_pinned(0), src};
 }
 
-void build_mult(Reg dst, Operand lh, Operand rh, Builder *ctx) {  // TODO: opti
-    lh = ctx->ensure_reg(lh);
-    rh = ctx->ensure_reg(rh);
-    ctx->push(new MultInst{lh, rh});
-    ctx->push(new MFLoInst{dst});
+static Reg build_neg_reg(Reg x, Builder *ctx) {
+    Reg dst = ctx->make_vreg();
+    ctx->push(new BinaryInst{BinaryInst::Sub, dst, Reg::make_pinned(0), x});
+    return dst;
 }
 
-void build_mult_const(Reg dst, Operand lh, int rh, Builder *ctx) {  // TODO
-    build_mult(dst, lh, Operand::make_const(rh), ctx);
+static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {  // TODO
+    asserts(lh.is_reg());
+    if (rh == 0)
+        return Operand::make_const(0);
+    bool neg = rh < 0;
+    uint rhu = rh;
+    if (neg)
+        rhu = -rhu;  // -rh could overflow (0x80000000)
+    uint w = 31 - __builtin_clz(rhu);
+    Reg dst = ctx->make_vreg();
+    if ((1u << w) == rhu) {
+        ctx->push(new ShiftInst{ShiftInst::Ll, dst, lh, w});
+        if (neg && rhu != uint(rh))
+            return build_neg_reg(dst, ctx);
+    } else {
+        Reg rht = ctx->make_vreg();
+        ctx->push(new MoveInst{rht, Operand::make_const(rh)});
+        ctx->push(new MultInst{lh, rht});
+        ctx->push(new MFLoInst{dst});
+    }
+    return dst;
 }
 
 Operand ir::BinaryInst::build(mips::Builder *ctx) {
     auto lh = BUILD_USE(lhs);
     auto rh = BUILD_USE(rhs);
-    if (rh.kind == Operand::Const) {
-        if (lh.kind == Operand::Const) {
+    if (rh.kind == Operand::Const)
+        if (lh.kind == Operand::Const)
             return Operand::make_const(ir::eval_bin(op, lh.val, rh.val));
-        }
-    }
-    auto dst = ctx->make_vreg();
 
-    if (op == tkd::Div || op == tkd::Mod) {
+    if (op == tkd::Div || op == tkd::Mod) {  // TODO
+        auto dst = ctx->make_vreg();
         lh = ctx->ensure_reg(lh);
         rh = ctx->ensure_reg(rh);
         ctx->push(new DivInst{lh, rh});
@@ -152,13 +168,20 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         return dst;
     }
 
-    if (op == tkd::Mul) {
-        build_mult(dst, lh, rh, ctx);
+    if (op == tkd::Mul) {  // TODO: opti
+        if (lh.is_const())
+            return build_reg_mult_const(rh, lh.val, ctx);
+        if (rh.is_const())
+            return build_reg_mult_const(lh, rh.val, ctx);
+        ctx->push(new MultInst{lh, rh});
+        auto dst = ctx->make_vreg();
+        ctx->push(new MFLoInst{dst});
         return dst;
     }
 
     using mips::BinaryInst;
 
+    auto dst = ctx->make_vreg();
     if (lh.kind == Operand::Const) {
         // rh must be a reg now
         switch (op) {
@@ -343,27 +366,24 @@ Operand ir::ReturnInst::build(mips::Builder *ctx) {
 }
 
 Operand ir::LoadInst::build(mips::Builder *ctx) {
-    auto base = BUILD_USE(this->base), off = BUILD_USE(idx);
+    auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     auto dst = ctx->make_vreg();
     using mips::LoadInst;
     using mips::BinaryInst;
     if (off.kind == Operand::Const) {
-        off.val <<= 2;
         if (base.kind == Operand::Const) {
             // TODO: what if imm overflow?
             ctx->push(new LoadInst{dst, Operand::make_pinned(0), base.val + off.val});
         } else
             ctx->push(new LoadInst{dst, base, off.val});
     } else {
-        auto ot = ctx->make_vreg();
-        ctx->push(new ShiftInst{ShiftInst::Ll, ot, off, 2});  // TODO: opti
         if (base.kind == Operand::Const) {
-            ctx->push(new LoadInst{dst, ot, base.val});
+            ctx->push(new LoadInst{dst, off, base.val});
             // MARS will do the trick when imm overflows
             // To allocate $at, we must do it explicitly
         } else {
             auto at = ctx->make_vreg();
-            ctx->push(new BinaryInst{BinaryInst::Add, at, base, ot});
+            ctx->push(new BinaryInst{BinaryInst::Add, at, base, off});
             ctx->push(new LoadInst{dst, at, 0});
         }
     }
@@ -371,24 +391,21 @@ Operand ir::LoadInst::build(mips::Builder *ctx) {
 }
 
 Operand ir::StoreInst::build(mips::Builder *ctx) {
-    auto base = BUILD_USE(this->base), off = BUILD_USE(idx);
+    auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     auto src = ctx->ensure_reg(BUILD_USE(val));
     using mips::StoreInst;
     using mips::BinaryInst;
     if (off.kind == Operand::Const) {
-        off.val <<= 2;
         if (base.kind == Operand::Const)
             ctx->push(new StoreInst{src, Operand::make_pinned(0), base.val + off.val});
         else
             ctx->push(new StoreInst{src, base, off.val});
     } else {
-        auto ot = ctx->make_vreg();
-        ctx->push(new ShiftInst{ShiftInst::Ll, ot, off, 2});
         if (base.kind == Operand::Const)
-            ctx->push(new StoreInst{src, ot, base.val});
+            ctx->push(new StoreInst{src, off, base.val});
         else {
             auto at = ctx->make_vreg();
-            ctx->push(new BinaryInst{BinaryInst::Add, at, base, ot});
+            ctx->push(new BinaryInst{BinaryInst::Add, at, base, off});
             ctx->push(new StoreInst{src, at, 0});
         }
     }
@@ -397,18 +414,18 @@ Operand ir::StoreInst::build(mips::Builder *ctx) {
 
 Operand ir::GEPInst::build(mips::Builder *ctx) {
     // dst = base + off * size * 4
-    auto base = BUILD_USE(this->base), off = BUILD_USE(idx);
+    auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     using mips::BinaryInst;
     if (off.kind == Operand::Const) {
-        off.val = (off.val * size) << 2;
+        off.val *= size;
         if (base.kind == Operand::Const)
             return Operand::make_const(off.val + base.val);
         auto dst = ctx->make_vreg();
         ctx->new_binary(BinaryInst::Add, dst, base, off);
         return dst;
     }
-    auto ot = ctx->make_vreg();
-    build_mult_const(ot, off, size << 2, ctx);
+    // TODO: if off is from reg mult imm, this can be better optimized, maybe before building mips on the IR
+    auto ot = build_reg_mult_const(off, size, ctx);
     auto dst = ctx->make_vreg();
     ctx->new_binary(BinaryInst::Add, dst, ot, base);
     return dst;

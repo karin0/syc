@@ -299,9 +299,9 @@ struct PrintfInst : Inst {
 
 struct AccessInst : Inst {
     Decl *lhs;
-    Use base, idx;
+    Use base, off;
 
-    AccessInst(Decl *lhs, Value *base, Value *idx);
+    AccessInst(Decl *lhs, Value *base, Value *off);
 };
 
 struct LoadInst : AccessInst {

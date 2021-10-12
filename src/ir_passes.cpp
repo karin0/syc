@@ -12,5 +12,5 @@ void run_passes(Prog &prog) {
     };
     run(dce);  // must do this first to remove unreachable branch/jumps so that the correct CFG can be produced
     run(mem2reg);
-    run(dce);
+    run(dce);  // this is required or things can break
 }

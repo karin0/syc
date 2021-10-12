@@ -85,20 +85,20 @@ void ReturnInst::print(std::ostream &os) {
 
 void LoadInst::print(std::ostream &os) {
     os << "load " << base;
-    if (idx.value != &Const::ZERO)
-        os << " @ " << idx;
+    if (off.value != &Const::ZERO)
+        os << " @ " << off;
     os << "  # " << lhs->name;
 }
 
 void StoreInst::print(std::ostream &os) {
     os << "store " << val << ", " << base;
-    if (idx.value != &Const::ZERO)
-        os << " @ " << idx;
+    if (off.value != &Const::ZERO)
+        os << " @ " << off;
     os << "  # " << lhs->name;
 }
 
 void GEPInst::print(std::ostream &os) {
-    os << "gep " << base << " @ " << idx << " * " << size << "  # " << lhs->name;
+    os << "gep " << base << " @ " << off << " * " << size << "  # " << lhs->name;
 }
 
 void AllocaInst::print(std::ostream &os) {

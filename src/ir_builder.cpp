@@ -55,8 +55,15 @@ struct Builder {
 
 }
 
+Value *build_2x(Value *v, Builder *ctx) {
+    if_a (Const, x, v)
+        return Const::of(x->val << 2);
+    else
+        return ctx->push(new BinaryInst{tkd::Mul, v, Const::of(4)});
+}
+
 GEPInst *unfold(Decl *lhs, vector<int> &dims, vector<ast::Expr *> &idx, Builder *ctx) {
-    return ctx->push(new GEPInst{lhs, lhs->value, idx.front()->build(ctx), dims.back()});
+    return ctx->push(new GEPInst{lhs, lhs->value, build_2x(idx.front()->build(ctx), ctx), dims.back()});
 }
 
 // only for idx.size() == dims.size()
@@ -65,14 +72,10 @@ std::pair<Value *, Value *> resolve_idx(
 ) {
     asserts(idx.size() == dims.size());
     if (idx.empty())
-        return { lhs->value, &Const::ZERO };
+        return {lhs->value, &Const::ZERO};
 
-    // auto base = lhs->value;
-    // if (idx.size() > 1)
-    //     base = ctx->push(new GEPInst{lhs, base, idx.front()->build(ctx), dims.back()});
-    // auto *base = idx.size() > 1 ? unfold(lhs, dims, idx, ctx) : lhs->value;
     auto *base = idx.size() > 1 ? unfold(lhs, dims, idx, ctx) : lhs->value;
-    return { base, idx.back()->build(ctx) };
+    return {base, build_2x(idx.back()->build(ctx), ctx)};
 }
 
 // idx.size() < dims.size() only when LVal
@@ -217,7 +220,7 @@ void ast::DeclStmt::build(Builder *ctx) {
                 ctx->push(new StoreInst{var, alloca, &Const::ZERO, init.front()->build(ctx)});
             else {
                 for (uint i = 0; i < init.size(); ++i)
-                    ctx->push(new StoreInst{var, alloca, Const::of(int(i)), init[i]->build(ctx)});
+                    ctx->push(new StoreInst{var, alloca, Const::of(int(i << 2)), init[i]->build(ctx)});
             }
         }
     }
