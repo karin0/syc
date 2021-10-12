@@ -134,7 +134,7 @@ static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {  // TODO
     uint rhu = rh;
     if (neg)
         rhu = -rhu;  // -rh could overflow (0x80000000)
-    uint w = 31 - __builtin_clz(rhu);
+    uint w = 31 - __builtin_clz(rhu);  // todo: use x & (x-1)
     Reg dst = ctx->make_vreg();
     if ((1u << w) == rhu) {
         ctx->push(new ShiftInst{ShiftInst::Ll, dst, lh, w});
@@ -215,7 +215,9 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
                 ctx->push(new BinaryInst{BinaryInst::Sub, dst, lh, rh});
             return dst;
 
-        // TODO: opti for branch
+        // TODO: opti for branch (detect slt* before b*)
+        // TODO: eliminate li-s in case 23 (imm moves) data flow analysis?
+        // TODO: maybe it's better to do all this MR things after great IR passes
         case tkd::Lt:
             ctx->new_binary(BinaryInst::Lt, dst, lh, rh);
             return dst;
