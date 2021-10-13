@@ -226,6 +226,9 @@ def main():
         dt = time.time() - dt
 
     if stats:
+        mkdir('stats')
+        os.chdir('stats')
+
         fn = now.strftime('result_%Y-%m-%d_%H-%M-%S.csv')
         head = ['Case']
         for s in stats[0][1].split()[0::2]:
