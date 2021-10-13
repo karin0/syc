@@ -104,7 +104,7 @@ T *as_a(U *p) {
 
 template <typename T, typename U>
 bool is_a(U *p) {
-    static_assert(std::is_convertible<T *, U *>::value, "invalid as_a");
+    static_assert(std::is_convertible<T *, U *>::value, "invalid is_a");
     return dynamic_cast<const T *>(p) != nullptr;
 }
 
