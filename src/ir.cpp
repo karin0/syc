@@ -159,7 +159,7 @@ CallInst::CallInst(Func *func, const vector<Value *> &argv) : func(func) {
 AllocaInst::AllocaInst(Decl *var) : var(var) {}
 
 PhiInst::PhiInst() {
-    vals.reserve(10);
+    vals.reserve(2);
 }
 
 BinaryBranchInst::BinaryBranchInst(Op op, BinaryInst *old_bin, BranchInst *old_br) : op(op),
