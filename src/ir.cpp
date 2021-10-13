@@ -36,9 +36,10 @@ Value *Use::release() {
 }
 
 Value::~Value() {
+    // asserts(uses.empty()); // this prevents final collecting
     // replace_uses(nullptr)
-    FOR_LIST (u, uses)
-        u->value = nullptr;
+    // FOR_LIST (u, uses)
+    //     u->value = nullptr;
 }
 
 void Value::add_use(Use *u) {
@@ -57,6 +58,23 @@ void Value::replace_uses(Value *n) {
 
 void BB::erase(Inst *i) {
     insts.erase(i);
+}
+
+Inst *BB::get_control() const {
+    auto *i = insts.back;
+    asserts(i->is_control());
+    return i;
+}
+
+vector<BB *> BB::get_succ() const {
+    auto *i = get_control();
+    if_a (BranchInst, x, i)
+        return {x->bb_then, x->bb_else};
+    if_a (JumpInst, x, i)
+        return {x->bb_to};
+    if (as_a<ReturnInst>(i))
+        return {};
+    unreachable();
 }
 
 Prog::Prog(vector<Decl *> &&globals) : globals(globals) {}
@@ -96,7 +114,7 @@ Const *Const::of(int val) {
     return memo[val] = new Const{val};
 }
 
-Global::Global(Decl *var) : var(var) {}
+Global::Global(const Decl *var) : var(var) {}
 
 Argument::Argument(Decl *var, uint pos) : var(var), pos(pos) {}
 
@@ -138,17 +156,6 @@ void PhiInst::push(Value *val, BB *bb) {
     vals.emplace_back(Use(val, this), bb);
 }
 
-vector<BB *> BB::get_succ() const {
-    auto *i = insts.back;
-    if_a (BranchInst, x, i)
-        return {x->bb_then, x->bb_else};
-    if_a (JumpInst, x, i)
-        return {x->bb_to};
-    if (as_a<ReturnInst>(i))
-        return {};
-    unreachable();
-}
-
 // TODO: add others
 bool Inst::is_pure() const {
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
@@ -156,7 +163,8 @@ bool Inst::is_pure() const {
 }
 
 bool Inst::is_control() const {
-    return is_a<BranchInst>(this) || is_a<JumpInst>(this) || is_a<ReturnInst>(this);
+    return is_a<BranchInst>(this) || is_a<JumpInst>(this) || is_a<ReturnInst>(this)
+            || is_a<BinaryBranchInst>(this);
 }
 
 int ir::eval_bin(OpKind op, int lh, int rh) {

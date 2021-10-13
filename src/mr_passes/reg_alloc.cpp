@@ -506,6 +506,7 @@ struct Allocater {
 
 }
 
+// TODO: alloc sp (or just use in mem insts)
 void reg_alloc(Func *f) {
     reg_allocater::Allocater{f}.run();
 }

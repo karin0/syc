@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include <type_traits>
+#include <algorithm>
 
 template <class T>
 struct Node {
@@ -109,3 +110,8 @@ bool is_a(U *p) {
 }
 
 #define if_a(T, x, p) if (auto *x = dynamic_cast<T *>(p))
+
+template <typename T, typename U>
+void vec_erase_if(T &c, U pred) {
+    c.erase(std::remove_if(c.begin(), c.end(), pred), c.end());
+}

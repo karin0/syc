@@ -68,6 +68,8 @@ struct Use : Node<Use> {
 
     ~Use();
 
+    Use &operator = (const Use &) = default;
+
     void set(Value *n);
 
     Value *release();
@@ -119,9 +121,12 @@ struct BB : Node<BB> {
 
     void erase(Inst *i);
 
+    Inst *get_control() const;
+
     vector<BB *> get_succ() const;
     // this gives wrong results when multiple control insts are ill-formed,
-    // i.e. there are insts after the first control inst in one bb
+    // i.e. there are insts after the first control inst in one
+    // or after br_induce where BinaryBranchInsts occur
 };
 
 #define FOR_INST(i, bb) FOR_LIST(i, (bb).insts)
@@ -183,9 +188,9 @@ struct Const : Value {
 };
 
 struct Global : Value {
-    Decl *var;
+    const Decl *var;
 
-    explicit Global(Decl *var);
+    explicit Global(const Decl *var);
 
     mips::Operand build_val(mips::Builder *) override;
 
@@ -212,7 +217,7 @@ struct Undef : Value {
 };
 
 struct Inst : Value, Node<Inst> {
-    BB *bb; // set by BB
+    BB *bb; // must be set by BB after new Inst!
 
     uint id;
 
@@ -360,5 +365,20 @@ struct PhiInst : Inst {
 };
 
 int eval_bin(OpKind op, int lhs, int rhs);
+
+// This should only occur after the conv pass
+struct BinaryBranchInst : Inst {
+    enum Op {
+        Eq, Ne, Lt, Le, Gt, Ge
+    } op;
+    Use lhs, rhs;
+    BB *bb_then, *bb_else;
+
+    BinaryBranchInst(Op op, Value *lhs, Value *rhs);
+
+    // mips::Operand build(mips::Builder *) override;
+
+    // void print(std::ostream &) override;
+};
 
 }

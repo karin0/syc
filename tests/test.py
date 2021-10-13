@@ -143,17 +143,27 @@ def _run(rid, src_file, in_file, ans_file):
     msg('ok')
 
 
-fail_evt = threading.Event()
+fail_lock = threading.Lock()
+fail_rid = None
 
 
 def run(rid, *args):
-    if fail_evt.is_set():
-        return
+    global fail_rid
+    with fail_lock:
+        if fail_rid is not None:
+            return
     try:
         return _run(rid, *args)
     except BaseException as e:
-        fail_evt.set()
+        acquired = False
+        with fail_lock:
+            if fail_rid is None:
+                fail_rid = rid
+                acquired = True
         print(f'[{rid}] {type(e).__name__} {e}')
+        if acquired:
+            mkdir('fail-out')
+            shutil.copytree(f'out/{rid}', f'fail-out/{rid}', dirs_exist_ok=True)
         raise e
 
 
