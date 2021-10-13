@@ -70,9 +70,9 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     for (auto &f : prog.funcs) if (f.is_main) {
         func_now = &f;
         os << FUNC_PRE "main:\n";
-        FOR_MBB (bb, f) {
+        FOR_BB (bb, f) {
             os << *bb << ":\n";
-            FOR_MINST (i, *bb) {
+            FOR_INST (i, *bb) {
                 os << INDENT;
                 if (is_a<ReturnInst>(i)) {
                     if (i->next || bb->next || prog.funcs.size() > 1)
@@ -88,9 +88,9 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     for (auto &f : prog.funcs) if (!f.is_main) {
         func_now = &f;
         os << FUNC_PRE << f.ir->name << ":\n";
-        FOR_MBB (bb, f) {
+        FOR_BB (bb, f) {
             os << *bb << ":\n";
-            FOR_MINST (i, *bb) {
+            FOR_INST (i, *bb) {
                 os << INDENT;
                 i->print(os);
                 os << '\n';

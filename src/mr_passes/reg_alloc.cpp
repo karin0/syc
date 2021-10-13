@@ -24,12 +24,12 @@ static std::pair<vector<Reg>, vector<Reg>> get_def_use_uncolored(Inst *i, Func *
 }
 
 static void liveness_analysis(Func *f) {
-    FOR_MBB (bb, *f) {
+    FOR_BB (bb, *f) {
         bb->use.clear();
         bb->def.clear();
         bb->live_out.clear();
 
-        FOR_MINST (i, *bb) {
+        FOR_INST (i, *bb) {
             auto use_def = get_def_use_uncolored(i, f);
             for (auto &x: use_def.second) if (!bb->def.count(x))
                 bb->use.insert(x);
@@ -42,7 +42,7 @@ static void liveness_analysis(Func *f) {
     bool changed;
     do {
         changed = false;
-        FOR_MBB (bb, *f) {
+        FOR_BB (bb, *f) {
             set<Reg> out;
             for (auto *t: bb->succ)
                 out.insert(t->live_in.begin(), t->live_in.end());
@@ -133,7 +133,7 @@ struct Allocater {
     }
 
     void build() {
-        // FOR_MBB (bb, *func) { // TODO: ??
+        // FOR_BB (bb, *func) { // TODO: ??
         for (auto *bb = func->bbs.back; bb; bb = bb->prev) {
             auto live = bb->live_out;
             for (auto *i = bb->insts.back; i; i = i->prev) {
@@ -403,7 +403,7 @@ struct Allocater {
             u->colored = true;
         }
 
-        FOR_MBB_MINST (i, bb, *func) {
+        FOR_BB_INST (i, bb, *func) {
             for (auto *x: get_owned_regs(i)) {
                 auto it = nodes.find(*x);
                 if (it != nodes.end()) {
@@ -424,7 +424,7 @@ struct Allocater {
 
     void spill(Reg r) const {
         infof("doing spilling for", r);
-        FOR_MBB (bb, *func) {
+        FOR_BB (bb, *func) {
             Inst *first_use = nullptr, *last_def = nullptr;
             Operand spiller;
             auto cp = [&]() {
@@ -447,7 +447,7 @@ struct Allocater {
                 spiller.kind = Operand::Void;
             };
             int cnt = 0;
-            FOR_MINST (i, *bb) {
+            FOR_INST (i, *bb) {
                 auto def_use = get_owned_def_use(i);
                 auto *def = def_use.first;
                 if (def && *def == r) {

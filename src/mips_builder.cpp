@@ -506,7 +506,7 @@ Prog build_mr(ir::Prog &ir) {
 
                         bool br = false;
                         ctx.bb = ubb;
-                        FOR_MINST (j, *ubb) {
+                        FOR_INST (j, *ubb) {
                             if_a (mips::ControlInst, y, j) {
                                 info("got br to mbb_%u", y->to->id);
                                 if (y->to == bb) {

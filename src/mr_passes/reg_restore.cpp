@@ -6,7 +6,7 @@ void reg_restore(Func *f) {
     std::set<uint> s_regs;  // s*, ra
     if (!f->is_main) {
         bool is_leaf = true;
-        FOR_MBB_MINST (i, bb, *f) {
+        FOR_BB_INST (i, bb, *f) {
             if (is_a<CallInst>(i))
                 is_leaf = false;
             for (auto x: get_def(i))
@@ -43,7 +43,7 @@ void reg_restore(Func *f) {
         p += 4;
     }
 
-    FOR_MBB_MINST (i, bb, *f) {
+    FOR_BB_INST (i, bb, *f) {
         if_a (ReturnInst, x, i) {
             p = base;
             for (auto id: s_regs) {

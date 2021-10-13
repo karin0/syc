@@ -3,7 +3,7 @@
 using namespace mips;
 
 void move_coalesce(Func *f) {
-    FOR_MBB (bb, *f) {
+    FOR_BB (bb, *f) {
         for (auto *i = bb->insts.front; i; ) {
             auto *next = i->next;
             if_a (BinaryInst, x, i) {

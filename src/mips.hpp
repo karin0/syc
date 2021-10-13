@@ -48,8 +48,6 @@ struct BB : Node<BB> {
     }
 };
 
-#define FOR_MINST(i, bb) FOR_LIST(i, (bb).insts)
-
 struct Func {
     List<BB> bbs;
     ir::Func *ir;
@@ -67,9 +65,6 @@ struct Func {
     BB *new_bb();
     Reg make_vreg();
 };
-
-#define FOR_MBB(bb, f) FOR_LIST(bb, (f).bbs)
-#define FOR_MBB_MINST(i, bb, f) FOR_MBB(bb, f) FOR_MINST(i, *bb)
 
 #define FMT_PRE "_syc_fmt_"
 
