@@ -213,16 +213,22 @@ void BranchInst::print(std::ostream &os) const {
 void BranchZeroInst::print(std::ostream &os) const {
     asserts(lhs.is_reg());
     switch (op) {
-        case Lt:
+        case Op::Eq:
+            os << "beq " << lhs << ", $0, " << *to;
+            return;
+        case Op::Ne:
+            os << "bne " << lhs << ", $0, " << *to;
+            return;
+        case Op::Lt:
             os << "bltz ";
             break;
-        case Gt:
+        case Op::Gt:
             os << "bgtz ";
             break;
-        case Le:
+        case Op::Le:
             os << "blez ";
             break;
-        case Ge:
+        case Op::Ge:
             os << "bgez ";
             break;
     }

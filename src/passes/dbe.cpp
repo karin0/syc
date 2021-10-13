@@ -25,14 +25,40 @@ void dbe(Func *f) {
 
     // TODO: do const prop before this
     FOR_BB (bb, *f) {
-        auto *i = bb->get_control();
-        if_a (BranchInst, x, i) {
-            if_a (Const, c, x->cond.value) {
+        if_a (BranchInst, i, bb->get_control()) {
+            BB *to = nullptr;
+            if_a (Const, c, i->cond.value) {
                 infof("found const cond", c->val);
-                auto *j = new JumpInst{c->val ? x->bb_then : x->bb_else};
+                to = c->val ? i->bb_then : i->bb_else;
+            } else if_a (BinaryInst, x, i->cond.value) {
+                // TODO: x < x+1
+                if_a (Const, lc, x->lhs.value) {
+                    if_a (Const, rc, x->rhs.value) {
+                        to = eval_bin(x->op, lc->val, rc->val) ? i->bb_then : i->bb_else;
+                        goto qwq;
+                    }
+                }
+                if (x->op == tkd::Lt || x->op == tkd::Gt) {
+                    auto *l = Const::of(Const::MIN), *r = Const::of(Const::MAX);
+                    if (x->op == tkd::Lt)
+                        std::swap(l, r);
+                    if (x->lhs.value == l || x->rhs.value == r)
+                        to = i->bb_else;
+                } else if (x->op == tkd::Le || x->op == tkd::Ge) {
+                    auto *l = Const::of(Const::MIN), *r = Const::of(Const::MAX);
+                    if (x->op == tkd::Ge)
+                        std::swap(l, r);
+                    if (x->lhs.value == l || x->rhs.value == r)
+                        to = i->bb_then;
+                }
+            }
+            qwq:
+            if (to) {
+                info("found const br");
+                auto *j = new JumpInst{to};
                 j->bb = bb;
-                bb->insts.replace(x, j);
-                delete x;
+                bb->insts.replace(i, j);
+                delete i;
             }
         }
     }
@@ -47,11 +73,14 @@ void dbe(Func *f) {
             // bb can be referred in some PhiInst!
             for (auto *v: u->get_succ()) {
                 FOR_INST (i, *v) {
-                    if_a (PhiInst, x, i)
-                        vec_erase_if(x->vals, [u](const std::pair<Use, BB *> &p) {
-                           return p.second == u;
-                        });
-                    else
+                    if_a (PhiInst, x, i) {
+                        for (auto it = x->vals.begin(); it != x->vals.end(); ++it) {
+                            if (it->second == u) {
+                                x->vals.erase(it);
+                                break;
+                            }
+                        }
+                    } else
                         break;
                 }
             }
@@ -63,6 +92,7 @@ void dbe(Func *f) {
             delete u;
         }
     }
+    // TODO: trivial phi induce
 
     infof(f->name, ": dbe done");
 }

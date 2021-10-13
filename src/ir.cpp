@@ -6,19 +6,23 @@
 using namespace ir;
 
 Use::Use(Value *value, Inst *user) : value(value), user(user) {
-    // trace("adding use %p to %p", this, value);
+    // trace("adding Use %p to val %p", this, value);
     if (value)
         value->add_use(this);
 }
 
-Use::Use(const Use &u) : Use(u.value, u.user) {}
-
 Use::Use(Use &&u) noexcept : Use(u.value, u.user) {}
 
 Use::~Use() {
-    // debug("destructing Use %p, val = %p", this, value);
+    // trace("destructing Use %p, val = %p", this, value);
     if (value)
         value->kill_use(this);
+}
+
+Use &Use::operator = (Use &&u) noexcept {
+    user = u.user;
+    set(u.value);
+    return *this;
 }
 
 void Use::set(Value *n) {
@@ -37,9 +41,9 @@ Value *Use::release() {
 
 Value::~Value() {
     // asserts(uses.empty()); // this prevents final collecting
-    // replace_uses(nullptr)
+    // replace_uses(nullptr);
     // FOR_LIST (u, uses)
-    //     u->value = nullptr;
+    //     u->value = nullptr;  // guard
 }
 
 void Value::add_use(Use *u) {
@@ -69,6 +73,8 @@ Inst *BB::get_control() const {
 vector<BB *> BB::get_succ() const {
     auto *i = get_control();
     if_a (BranchInst, x, i)
+        return {x->bb_then, x->bb_else};
+    if_a (BinaryBranchInst, x, i)
         return {x->bb_then, x->bb_else};
     if_a (JumpInst, x, i)
         return {x->bb_to};
@@ -152,8 +158,30 @@ CallInst::CallInst(Func *func, const vector<Value *> &argv) : func(func) {
 
 AllocaInst::AllocaInst(Decl *var) : var(var) {}
 
+PhiInst::PhiInst() {
+    vals.reserve(10);
+}
+
+BinaryBranchInst::BinaryBranchInst(Op op, BinaryInst *old_bin, BranchInst *old_br) : op(op),
+    lhs(old_bin->lhs.value, this), rhs(old_bin->rhs.value, this),
+    bb_then(old_br->bb_then), bb_else(old_br->bb_else) {}
+
+RelOp BinaryBranchInst::swap_op(Op op) {
+    using namespace rel;
+    switch (op) {
+        case Eq: case Ne: return op;
+        case Lt: return Gt;
+        case Le: return Ge;
+        case Gt: return Lt;
+        case Ge: return Le;
+        default:
+            unreachable();
+    }
+}
+
 void PhiInst::push(Value *val, BB *bb) {
-    vals.emplace_back(Use(val, this), bb);
+    Use u{val, this};
+    vals.emplace_back(std::move(u), bb);
 }
 
 // TODO: add others
@@ -181,6 +209,19 @@ int ir::eval_bin(OpKind op, int lh, int rh) {
         case Ge:  return lh >= rh;
         case And: return lh && rh;
         case Or:  return lh || rh;
+        case Eq:  return lh == rh;
+        case Ne:  return lh != rh;
+        default:
+            unreachable();
+    }
+}
+
+int rel::eval(RelOp op, int lh, int rh) {
+    switch (op) {
+        case Lt:  return lh < rh;
+        case Gt:  return lh > rh;
+        case Le:  return lh <= rh;
+        case Ge:  return lh >= rh;
         case Eq:  return lh == rh;
         case Ne:  return lh != rh;
         default:

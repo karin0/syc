@@ -409,9 +409,9 @@ struct Allocater {
                 if (it != nodes.end()) {
                     auto &u = it->second;
                     if (x->is_pinned())
-                        x->kind = Reg::Machine;
+                        x->kind = Reg::Pinned;
                     else if (u.colored)
-                        *x = Reg::make_machine(Regs::allocatable[u.color]);
+                        *x = Reg::make_pinned(Regs::allocatable[u.color]); // TODO: QAQ why machined?
                 }
             }
         }
@@ -424,23 +424,24 @@ struct Allocater {
 
     void spill(Reg r) const {
         infof("doing spilling for", r);
+        int off = int((func->max_call_arg_num + func->alloca_num + func->spill_num) << 2);
         FOR_BB (bb, *func) {
             Inst *first_use = nullptr, *last_def = nullptr;
             Operand spiller;
             auto cp = [&]() {
                 if (first_use) {
                     asserts(spiller.is_virtual());
+                    infof("use", spiller, "for spilled", r, "at", off);
                     bb->insts.insert(first_use, new LoadInst{
-                        spiller, Reg::make_pinned(Regs::sp),
-                        int((func->max_call_arg_num + func->alloca_num + func->spill_num) << 2)
+                        spiller, Reg::make_pinned(Regs::sp), off
                     });
                     first_use = nullptr;
                 }
                 if (last_def) {
                     asserts(spiller.is_virtual());
+                    infof("def", spiller, "for spilled", r, "at", off);
                     bb->insts.insert_after(last_def, new StoreInst{
-                        spiller, Reg::make_pinned(Regs::sp),
-                        int((func->max_call_arg_num + func->alloca_num + func->spill_num) << 2)
+                        spiller, Reg::make_pinned(Regs::sp), off
                     });
                     last_def = nullptr;
                 }
@@ -466,7 +467,6 @@ struct Allocater {
                 if (cnt++ > 30) {
                     cp();
                     // TODO: cnt = 0 ?
-                    cnt = 0;
                 }
             }
             cp();

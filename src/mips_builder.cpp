@@ -210,7 +210,10 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         case tkd::Sub:
             // subiu is not there
             if (rh.kind == Operand::Const)
-                ctx->new_binary(BinaryInst::Add, dst, lh, Operand::make_const(-rh.val));
+                ctx->new_binary(BinaryInst::Add, dst, lh,
+                                rh.val == Operand::MIN_CONST ? ctx->move_to_reg(Operand::make_const(Operand::MIN_CONST))
+                                    : Operand::make_const(-rh.val)
+                                );  // - INT_MIN
             else
                 ctx->push(new BinaryInst{BinaryInst::Sub, dst, lh, rh});
             return dst;
@@ -231,9 +234,12 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         case tkd::Le:
             // r1 <= r2  : !(r2 < r1)
             // r1 <= imm : r1 < imm + 1
-            if (rh.kind == Operand::Const)
+            if (rh.kind == Operand::Const) {
+                if (rh.val == Operand::MAX_CONST) {
+                    return Operand::make_const(1); // dst is discarded
+                }
                 ctx->new_binary(BinaryInst::Lt, dst, lh, Operand::make_const(rh.val + 1));
-            else {
+            } else {
                 auto nt = ctx->make_vreg();
                 ctx->push(new BinaryInst{BinaryInst::Lt, nt, rh, lh});
                 ctx->push(new_bool_not(dst, nt));
@@ -449,6 +455,97 @@ Operand ir::PhiInst::build(mips::Builder *ctx) {
     return ctx->make_vreg();
 }
 
+Operand ir::BinaryBranchInst::build(mips::Builder *ctx) {
+    using mips::BinaryInst;
+    using mips::BranchInst;
+    using mips::BranchZeroInst;
+    using namespace rel;
+    asserts(next == nullptr);
+    auto lh = BUILD_USE(lhs), rh = BUILD_USE(rhs);
+    auto op = this->op;
+    infof("bbi building", lh, rh, lhs, rhs);
+    if (lh.is_const() || (lh.is_physical() && lh.val == 0)) {
+        std::swap(lh, rh);
+        op = ir::BinaryBranchInst::swap_op(op);
+    }
+    if (lh.is_const() || (lh.is_physical() && lh.val == 0)) {
+        error("uncoalesced const br!");
+        auto *to = ir::rel::eval(op, lh.val, rh.val) ? bb_then : bb_else;
+        ctx->push(new mips::JumpInst{to->mbb});
+        return Operand::make_void();
+    }
+
+    mips::BaseBranchInst *br;
+    auto *to = bb_then->mbb;
+    auto r0 = Reg::make_pinned(0);
+    if (rh.val == 0 && (rh.is_const() || rh.is_physical()))
+        br = new BranchZeroInst{op, lh, to};
+    else if (rh.is_reg()) {
+        switch (op) {
+            case Eq:
+                br = new BranchInst{BranchInst::Eq, lh, rh, to};
+                break;
+            case Ne:
+                br = new BranchInst{BranchInst::Ne, lh, rh, to};
+                break;
+            default: {
+                // Lt: lh < rh
+                // Le: !(rh < lh)
+                // Gt: rh < lh
+                // Ge: !(lh < rh)
+                auto t = ctx->make_vreg();
+                if (op == Lt || op == Ge)
+                    ctx->push(new BinaryInst{BinaryInst::Lt, t, lh, rh});
+                else
+                    ctx->push(new BinaryInst{BinaryInst::Lt, t, rh, lh});
+                br = new BranchInst{
+                    op == Lt || op == Gt ? BranchInst::Ne : BranchInst::Eq,
+                    t, r0, to};
+            }
+        }
+    } else {
+        asserts(rh.is_const());
+        if (rh.val == 1 && op == Lt)
+            br = new BranchZeroInst(Le, lh, to);
+        else if (rh.val == 1 && op == Ge)
+            br = new BranchZeroInst(Gt, lh, to);
+        else if (rh.val == -1 && op == Le)
+            br = new BranchZeroInst(Lt, lh, to);
+        else if (rh.val == -1 && op == Gt)
+            br = new BranchZeroInst(Ge, lh, to);
+        else {
+            // lh < c  : lh < c
+            // lh <= c : lh < c + 1
+            // lh > c  : !(lh < c + 1)
+            // lh >= c : !(lh < c)
+            auto t = ctx->make_vreg();
+            if (op == Eq || op == Ne) { // li, b vs xor, b
+                ctx->push(new MoveInst{t, rh});
+                br = new BranchInst(op == Eq ? BranchInst::Eq : BranchInst::Ne, lh, t, to);
+            } else {
+                if (op == Lt || op == Ge)
+                    ctx->new_binary(BinaryInst::Lt, t, lh, Operand::make_const(rh.val));
+                else {
+                    asserts(rh.val != Operand::MAX_CONST);  // dbe
+                    ctx->new_binary(BinaryInst::Lt, t, lh, Operand::make_const(rh.val + 1));
+                }
+                br = new BranchInst(op == Lt || op == Le ? BranchInst::Ne : BranchInst::Eq, t, r0, to);
+            }
+        }
+    }
+
+    if (ctx->bb->next == bb_then->mbb) {
+        br->invert();
+        br->to = bb_else->mbb;
+        ctx->push(br);
+    } else {
+        ctx->push(br);
+        if (ctx->bb->next != bb_else->mbb)
+            ctx->push(new mips::JumpInst{bb_else->mbb});  // TODO: opti
+    }
+    return Operand::make_void();
+}
+
 Prog build_mr(ir::Prog &ir) {
     Prog res{&ir};
 
@@ -468,7 +565,7 @@ Prog build_mr(ir::Prog &ir) {
         res.funcs.emplace_back(&fun);
         auto *func = &res.funcs.back();
 
-        FOR_IBB (ibb, fun)
+        FOR_BB (ibb, fun)
             ibb->mbb = func->new_bb();
 
         auto *bb_start = func->bbs.front;
@@ -482,18 +579,20 @@ Prog build_mr(ir::Prog &ir) {
         }
 
         ctx.func = func;
-        FOR_IBB (ibb, fun) {
+        FOR_BB (ibb, fun) {
             ctx.bb = ibb->mbb;
-            FOR_IINST (i, *ibb)
+            FOR_INST (i, *ibb)
                 i->mach_res = i->build(&ctx);
             for (auto *t: ibb->get_succ())
                 ibb->mbb->succ.push_back(t->mbb);
         }
 
-        FOR_IBB (ibb, fun) {
+        FOR_BB (ibb, fun) {
             auto *bb = ibb->mbb;
             auto *head = bb->insts.front;
-            FOR_IINST (i, *ibb) {
+            infof("ibb", ibb);
+            FOR_INST (i, *ibb) {
+                infof("ibb inst", ibb, i);
                 if_a (ir::PhiInst, x, i) {
                     auto t = func->make_vreg();
                     if (head)
@@ -508,7 +607,7 @@ Prog build_mr(ir::Prog &ir) {
                         ctx.bb = ubb;
                         FOR_INST (j, *ubb) {
                             if_a (mips::ControlInst, y, j) {
-                                info("got br to mbb_%u", y->to->id);
+                                info("%p, got br to mbb_%u, i am %u", j, y->to->id, bb->id);
                                 if (y->to == bb) {
                                     br = true;
                                     ctx.push_point = y;

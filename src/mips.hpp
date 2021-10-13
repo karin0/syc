@@ -3,10 +3,6 @@
 #include "ir.hpp"
 #include <unordered_map>
 
-#define FOR_IBB FOR_BB
-#define FOR_IINST FOR_INST
-#define FOR_IBB_IINST FOR_BB_INST
-
 const size_t MAX_ARG_REGS = 4;
 
 namespace mips {
@@ -112,13 +108,12 @@ namespace Regs {
         t8, t9
     };
 
-    constexpr std::array<uint, 10> callee_saved{
+    constexpr std::array<uint, 8> callee_saved{
         s0, 17, 18, 19, 20,
         21, 22, 23,
-        gp, fp,
     };
 
-    constexpr std::array<uint, 26> allocatable{
+    constexpr std::array<uint, 24> allocatable{
         t0,  9, 10, 11, 12,
         13, 14, 15,
         t8, t9,
@@ -126,7 +121,6 @@ namespace Regs {
         a0,  5,  6,  7,
         s0, 17, 18, 19, 20,
         21, 22, 23,
-        gp, fp
     };
 
     extern uint inv_allocatable[32];
@@ -224,22 +218,36 @@ protected:
     explicit ControlInst(BB *to);
 };
 
-struct BranchInst : ControlInst {
+struct BaseBranchInst : ControlInst {
+    virtual void invert() = 0;
+
+protected:
+    explicit BaseBranchInst(BB *to);
+};
+
+struct BranchInst : BaseBranchInst {
     enum Op {
-        Eq, Ne
+        Eq = 0, Ne = 1
     } op;
     Reg lhs, rhs;
 
     BranchInst(Op op, Reg lhs, Reg rhs, BB *to);
 
+    virtual void invert() override;
+
     void print(std::ostream &) const override;
 };
 
-struct BranchZeroInst : ControlInst {
-    enum Op {
-        Lt, Gt, Le, Ge
-    } op;
+using ir::RelOp;
+
+struct BranchZeroInst : BaseBranchInst {
+    using Op = RelOp;
+    Op op;
     Reg lhs;
+
+    BranchZeroInst(Op op, Reg lhs, BB *to);
+
+    virtual void invert() override;
 
     void print(std::ostream &) const override;
 };

@@ -181,8 +181,21 @@ CallInst::CallInst(ir::Func *func) : func(func) {}
 
 ControlInst::ControlInst(BB *to) : to(to) {}
 
-BranchInst::BranchInst(BranchInst::Op op, Reg lhs, Reg rhs, BB *to) :
-    ControlInst(to), op(op), lhs(lhs), rhs(rhs) {}
+BaseBranchInst::BaseBranchInst(BB *to) : ControlInst(to) {}
+
+BranchInst::BranchInst(Op op, Reg lhs, Reg rhs, BB *to) :
+    BaseBranchInst(to), op(op), lhs(lhs), rhs(rhs) {}
+
+void BranchInst::invert() {
+    op = static_cast<Op>(op ^ 1);
+}
+
+BranchZeroInst::BranchZeroInst(Op op, Reg lhs, BB *to) :
+    BaseBranchInst(to), op(op), lhs(lhs) {}
+
+void BranchZeroInst::invert() {
+    op = static_cast<Op>(op ^ 1);
+}
 
 JumpInst::JumpInst(BB *to) : ControlInst(to) {}
 

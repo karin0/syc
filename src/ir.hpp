@@ -15,6 +15,9 @@ struct BB;
 struct Builder;
 
 struct Operand {
+    static constexpr const int MAX_CONST = 2147483647;
+    static constexpr const int MIN_CONST = -2147483648;
+
     enum Kind {
         Virtual, Pinned, Machine, Const, Void
     } kind;
@@ -62,19 +65,17 @@ struct Use : Node<Use> {
     Inst *user;
 
     Use(Value *value, Inst *user);
-
-    Use(const Use &);   // vector<Use> requires this
     Use(Use &&) noexcept;
-
     ~Use();
 
-    Use &operator = (const Use &) = default;
+    Use &operator = (const Use &) = delete;
+    Use &operator = (Use &&) noexcept;  // used by STL
 
     void set(Value *n);
 
     Value *release();
 
-    // friend std::ostream &operator << (std::ostream &, const Use &);
+    friend std::ostream &operator << (std::ostream &, const Use &);
 };
 
 struct Value {
@@ -174,6 +175,9 @@ struct Prog {
 };
 
 struct Const : Value {
+    static constexpr const int MAX = mips::Operand::MAX_CONST;
+    static constexpr const int MIN = mips::Operand::MIN_CONST;
+
     int val;
 
     explicit Const(int val);
@@ -357,6 +361,8 @@ struct PhiInst : Inst {
 
     int aid = -1; // mem2reg
 
+    PhiInst();
+
     void push(Value *val, BB *bb);
 
     mips::Operand build(mips::Builder *) override;
@@ -367,18 +373,32 @@ struct PhiInst : Inst {
 int eval_bin(OpKind op, int lhs, int rhs);
 
 // This should only occur after the conv pass
+
+namespace rel {
+
+enum RelOp {
+    Eq = 0, Ne = 1, Lt = 2, Ge = 3, Le = 4, Gt = 5
+};
+
+int eval(RelOp, int, int);
+
+}
+
+using rel::RelOp;
+
 struct BinaryBranchInst : Inst {
-    enum Op {
-        Eq, Ne, Lt, Le, Gt, Ge
-    } op;
+    using Op = RelOp;
+    Op op;
     Use lhs, rhs;
     BB *bb_then, *bb_else;
 
-    BinaryBranchInst(Op op, Value *lhs, Value *rhs);
+    BinaryBranchInst(Op op, BinaryInst *old_bin, BranchInst *old_br);  // old must be dropped later
 
-    // mips::Operand build(mips::Builder *) override;
+    static Op swap_op(Op op);
 
-    // void print(std::ostream &) override;
+    mips::Operand build(mips::Builder *) override;
+
+    void print(std::ostream &) override;
 };
 
 }

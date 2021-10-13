@@ -1,4 +1,5 @@
 import os
+import sys
 import csv
 import time
 import shutil
@@ -28,6 +29,28 @@ syc_path = path.realpath('build/syc')
 cpu_count = multiprocessing.cpu_count()
 
 stats = []
+
+
+def find_cases(dir):
+    res = []
+    for root, _, fns in os.walk(dir):
+        sfns = None
+        for fn in fns:
+            if fn.startswith('testfile'):
+                fin = 'input' + fn[8:]
+                if sfns is None:
+                    sfns = frozenset(fns)
+                if fin in sfns:
+                    res.append((path.join(root, fn), path.join(root, fin), None))
+    return res
+
+
+def get_fail_cases():
+    return [('fail-out/case.txt', 'fail-out/in.txt', None)]
+
+
+def get_cases():
+    return find_cases(cases_root)
 
 
 def put_stat(src_file, stat):
@@ -71,15 +94,21 @@ def _run(rid, src_file, in_file, ans_file):
     rid = f'out/{rid}'
     mkdir(rid)
 
+    for fn in os.listdir(rid):
+        os.remove(path.join(rid, fn))
+
     asm_fn = path.join(rid, 'out.asm')
     in_fn = path.join(rid, 'in.txt')
     out_fn = path.join(rid, 'out.txt')
     gcc_src_fn = path.join(rid, 'src.c')
     gcc_out_fn = path.join(rid, 'a.out')
+    case_fn = path.join(rid, 'case.txt')
+
+    msg(f'src copied to {shutil.copy(src_file, case_fn)}')
 
     msg('compiling')
     subprocess.run(
-        [syc_path, src_file, '-o', path.realpath(asm_fn)],
+        [syc_path, path.realpath(src_file), '-o', path.realpath(asm_fn)],
         timeout=compile_timeout,
         check=True,
         cwd=rid
@@ -96,8 +125,25 @@ def _run(rid, src_file, in_file, ans_file):
                     in_fp.write('\n')
 
     with open(in_fn, 'rb') as in_fp:
+        if not ans_file:
+            ans_file = path.join(rid, 'ans.txt')
+            shutil.copy(header_path, gcc_src_fn)
+            with open(gcc_src_fn, 'ab') as src_fp:
+                with open(src_file, 'rb') as fp:
+                    src_fp.write(fp.read())
+
+            call([gcc, '-O0', '-x', 'c', '-o', gcc_out_fn, gcc_src_fn])
+            with open(ans_file, 'wb') as ans_fp:
+                subprocess.run(
+                    [gcc_out_fn],
+                    stdin=in_fp,
+                    stdout=ans_fp,
+                    check=True
+                )
+
         with open(out_fn, 'wb') as out_fp:
             msg('simulating')
+            in_fp.seek(0)
             stat = subprocess.run(
                 ['java', '-jar', mars_path, 'nc', 'me', 'mc', 'Default', asm_fn],
                 stdin=in_fp,
@@ -111,23 +157,6 @@ def _run(rid, src_file, in_file, ans_file):
             stat = stat.lower().strip()
             msg(stat)
             put_stat(src_file, stat)
-
-        if not ans_file:
-            ans_file = path.join(rid, 'ans.txt')
-            shutil.copy(header_path, gcc_src_fn)
-            with open(gcc_src_fn, 'ab') as src_fp:
-                with open(src_file, 'rb') as fp:
-                    src_fp.write(fp.read())
-
-            call([gcc, '-O0', '-x', 'c', '-o', gcc_out_fn, gcc_src_fn])
-            in_fp.seek(0)
-            with open(ans_file, 'wb') as ans_fp:
-                subprocess.run(
-                    [gcc_out_fn],
-                    stdin=in_fp,
-                    stdout=ans_fp,
-                    check=True
-                )
 
     '''
     with open(ans_file, 'rb') as fp:
@@ -160,29 +189,16 @@ def run(rid, *args):
             if fail_rid is None:
                 fail_rid = rid
                 acquired = True
-        print(f'[{rid}] {type(e).__name__} {e}')
+        pre = f'[{rid}] ({args[0]})'
+        print(pre, f'{type(e).__name__} {e}')
         if acquired:
-            mkdir('fail-out')
-            shutil.copytree(f'out/{rid}', f'fail-out/{rid}', dirs_exist_ok=True)
+            print(pre, 'acquired fail-out')
+            if path.isdir('fail-out'):
+                if path.isdir('fail-out-old'):
+                    shutil.rmtree('fail-out-old')
+                shutil.move('fail-out', 'fail-out-old')
+            shutil.copytree(f'out/{rid}', 'fail-out')
         raise e
-
-
-def find_cases(dir):
-    res = []
-    for root, _, fns in os.walk(dir):
-        sfns = None
-        for fn in fns:
-            if fn.startswith('testfile'):
-                fin = 'input' + fn[8:]
-                if sfns is None:
-                    sfns = frozenset(fns)
-                if fin in sfns:
-                    res.append((path.join(root, fn), path.join(root, fin), None))
-    return res
-
-
-def get_cases():
-    return find_cases(cases_root)
 
 
 def write_csv(fn, data):
@@ -200,12 +216,13 @@ def read_csv(fn):
 def case_iden(s):
     s = path.relpath(s, cases_root)
     a = path.normpath(s).split(os.sep)
+    if 'fail-out' in s:
+        return 'failure'
     if '926' in s:
         return a[-2] + '-' + a[-1][8:-4]
-    elif 'hw' in s:
+    if 'hw' in s:
         return 'hw-' + a[-1][8:-4]
-    else:
-        return s
+    return s
 
 
 def key0(a):
@@ -225,7 +242,13 @@ def main():
     print(cpu_count, 'cores found')
     build()
 
-    cases = get_cases()
+    fail = len(sys.argv) > 1
+
+    if fail:
+        cases = get_fail_cases()
+    else:
+        cases = get_cases()
+
     with futures.ThreadPoolExecutor(max_workers=cpu_count) as executor:
         dt = time.time()
         for fut in futures.as_completed([
@@ -235,7 +258,7 @@ def main():
             fut.result()
         dt = time.time() - dt
 
-    if stats:
+    if not fail and stats:
         mkdir('stats')
         os.chdir('stats')
 

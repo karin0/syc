@@ -5,13 +5,6 @@
 
 namespace ir {
 
-std::ostream &operator << (std::ostream &os, Inst &i) {
-    if (!i.uses.empty())
-        os << INST_PRE << i.id << " := ";
-    i.print(os);
-    return os;
-}
-
 std::ostream &operator << (std::ostream &os, const Use &u) {
     if (u.value)
         u.value->print_val(os);
@@ -19,6 +12,14 @@ std::ostream &operator << (std::ostream &os, const Use &u) {
         os << "null";
     return os;
 }
+
+std::ostream &operator << (std::ostream &os, Inst &i) {
+    if (!i.uses.empty())
+        os << INST_PRE << i.id << " := ";
+    i.print(os);
+    return os;
+}
+
 
 static std::ostream &operator << (std::ostream &os, const Decl &var) {
     os << var.name << '[';
@@ -105,11 +106,25 @@ void AllocaInst::print(std::ostream &os) {
     os << "alloca " << *var;
 }
 
-void PhiInst::print(std::ostream &os) {
+void PhiInst::print(std::ostream &  os) {
     os << "phi [ ";
     for (auto &p : vals)
         os << "bb_" << p.second->id << ": " << p.first << ", ";
     os << ']';
+}
+
+void BinaryBranchInst::print(std::ostream &os) {
+    using namespace rel;
+    os << "binr " << lhs << ' ';
+    switch (op) {
+        case Eq: os << "=="; break;
+        case Ne: os << "!="; break;
+        case Lt: os << '<';  break;
+        case Le: os << "<="; break;
+        case Gt: os << '>';  break;
+        case Ge: os << ">="; break;
+    }
+    os << ' ' << rhs << " ? bb_" << bb_then->id << " : bb_" << bb_else->id;;
 }
 
 #define INDENT      "    "
