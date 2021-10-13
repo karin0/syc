@@ -37,7 +37,7 @@ Value *Use::release() {
 
 Value::~Value() {
     // replace_uses(nullptr)
-    FOR_LIST (Use, u, uses)
+    FOR_LIST (u, uses)
         u->value = nullptr;
 }
 

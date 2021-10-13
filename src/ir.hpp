@@ -118,10 +118,13 @@ struct BB : Node<BB> {
     }
 
     void erase(Inst *i);
+
     vector<BB *> get_succ() const;
+    // this gives wrong results when multiple control insts are ill-formed,
+    // i.e. there are insts after the first control inst in one bb
 };
 
-#define FOR_INST(i, bb) FOR_LIST(ir::Inst, i, (bb).insts)
+#define FOR_INST(i, bb) FOR_LIST(i, (bb).insts)
 
 struct Func {
     bool returns_int;
@@ -140,7 +143,7 @@ struct Func {
     void push_bb(BB *bb);
 };
 
-#define FOR_BB(bb, f) FOR_LIST(ir::BB, bb, (f).bbs)
+#define FOR_BB(bb, f) FOR_LIST(bb, (f).bbs)
 #define FOR_BB_INST(i, bb, f) FOR_BB(bb, f) FOR_INST(i, *bb)
 
 struct GetIntFunc : Func {

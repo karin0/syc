@@ -93,7 +93,8 @@ struct List {
     }
 };
 
-#define FOR_LIST(T, o, l) for (T *o = (l).front; o; o = o->next)
+#define FOR_LIST(o, l) for (auto *o = (l).front; o; o = o->next)
+#define FOR_LIST_MUT(o, l) for (decltype((l).front) o = (l).front, o##_next; o && ((o##_next = o->next), true); o = o##_next)
 
 template <typename T, typename U>
 T *as_a(U *p) {
