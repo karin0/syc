@@ -563,8 +563,8 @@ Prog build_mr(ir::Prog &ir) {
     Prog res{&ir};
 
     uint data = DATA_BASE;
-    // TODO: big data base address affects global access, consider using a shared base reg
-    // TODO: remove unused (and const) globs before this
+    // big data base address affects global access, use gp as shared base reg
+    // TODO: remove unused (and const) globs and arrange them (put smaller ones first?) before this
     for (auto *glob: ir.globals) {
         infof("addr of", glob->name, "is", data);
         glob->addr = data;
