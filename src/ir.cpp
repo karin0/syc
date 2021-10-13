@@ -180,8 +180,7 @@ RelOp BinaryBranchInst::swap_op(Op op) {
 }
 
 void PhiInst::push(Value *val, BB *bb) {
-    Use u{val, this};
-    vals.emplace_back(std::move(u), bb);
+    vals.emplace_back(Use{val, this}, bb);
 }
 
 // TODO: add others
@@ -218,12 +217,12 @@ int ir::eval_bin(OpKind op, int lh, int rh) {
 
 int rel::eval(RelOp op, int lh, int rh) {
     switch (op) {
-        case Lt:  return lh < rh;
-        case Gt:  return lh > rh;
-        case Le:  return lh <= rh;
-        case Ge:  return lh >= rh;
-        case Eq:  return lh == rh;
-        case Ne:  return lh != rh;
+        case Lt: return lh < rh;
+        case Gt: return lh > rh;
+        case Le: return lh <= rh;
+        case Ge: return lh >= rh;
+        case Eq: return lh == rh;
+        case Ne: return lh != rh;
         default:
             unreachable();
     }

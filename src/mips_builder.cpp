@@ -373,50 +373,46 @@ Operand ir::ReturnInst::build(mips::Builder *ctx) {
     return Operand::make_void();
 }
 
-Operand ir::LoadInst::build(mips::Builder *ctx) {
-    auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
-    auto dst = ctx->make_vreg();
-    using mips::LoadInst;
-    using mips::BinaryInst;
+static int int_cast(uint x) {
+    return uint(x) <= Operand::MAX_CONST ? int(x) :
+        int(x - Operand::MAX_CONST - 1) + Operand::MIN_CONST;
+}
+
+std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
     if (off.kind == Operand::Const) {
         if (base.kind == Operand::Const) {
             // TODO: what if imm overflow?
-            ctx->push(new LoadInst{dst, Operand::make_pinned(0), base.val + off.val});
-        } else
-            ctx->push(new LoadInst{dst, base, off.val});
-    } else {
-        if (base.kind == Operand::Const) {
-            ctx->push(new LoadInst{dst, off, base.val});
-            // MARS will do the trick when imm overflows
-            // To allocate $at, we must do it explicitly
-        } else {
-            auto at = ctx->make_vreg();
-            ctx->push(new BinaryInst{BinaryInst::Add, at, base, off});
-            ctx->push(new LoadInst{dst, at, 0});
+            int d = base.val + off.val, imm;
+            if (!is_imm(d) && is_imm(imm = int_cast(uint(d) - DATA_BASE))) {
+                ctx->prog->gp_used = true;
+                return {Operand::make_pinned(Regs::gp), imm};
+            }
+            return {Operand::make_pinned(0), base.val + off.val};
         }
+        return {base, off.val};
     }
+    // TODO: MARS will do the trick when the offset overflows imm, but not optimally
+    // To allocate $at, we must do it explicitly
+    if (base.kind == Operand::Const)
+        return {off, base.val};
+    auto t = ctx->make_vreg();
+    ctx->push(new BinaryInst{BinaryInst::Add, t, base, off});
+    return {t, 0};
+}
+
+Operand ir::LoadInst::build(mips::Builder *ctx) {
+    auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
+    auto dst = ctx->make_vreg();
+    auto res = resolve_mem(base, off, ctx);
+    ctx->push(new mips::LoadInst{dst, res.first, res.second});
     return dst;
 }
 
 Operand ir::StoreInst::build(mips::Builder *ctx) {
     auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     auto src = ctx->ensure_reg(BUILD_USE(val));
-    using mips::StoreInst;
-    using mips::BinaryInst;
-    if (off.kind == Operand::Const) {
-        if (base.kind == Operand::Const)
-            ctx->push(new StoreInst{src, Operand::make_pinned(0), base.val + off.val});
-        else
-            ctx->push(new StoreInst{src, base, off.val});
-    } else {
-        if (base.kind == Operand::Const)
-            ctx->push(new StoreInst{src, off, base.val});
-        else {
-            auto at = ctx->make_vreg();
-            ctx->push(new BinaryInst{BinaryInst::Add, at, base, off});
-            ctx->push(new StoreInst{src, at, 0});
-        }
-    }
+    auto res = resolve_mem(base, off, ctx);
+    ctx->push(new mips::StoreInst{src, res.first, res.second});
     return Operand::make_void();
 }
 
@@ -442,7 +438,7 @@ Operand ir::GEPInst::build(mips::Builder *ctx) {
 Operand ir::AllocaInst::build(mips::Builder *ctx) {
     auto dst = ctx->make_vreg();
     auto *add = ctx->new_binary(mips::BinaryInst::Add, dst,
-                    Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
+        Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
     infof("alloca val", add->rhs.val);
     // TODO: siz?
     // TODO: fix with max_call_arg_num
@@ -549,7 +545,7 @@ Operand ir::BinaryBranchInst::build(mips::Builder *ctx) {
 Prog build_mr(ir::Prog &ir) {
     Prog res{&ir};
 
-    uint data = 0x10010000;
+    uint data = DATA_BASE;
     // TODO: big data base address affects global access, consider using a shared base reg
     // TODO: remove unused (and const) globs before this
     for (auto *glob: ir.globals) {

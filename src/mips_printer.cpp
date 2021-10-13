@@ -70,6 +70,12 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     for (auto &f : prog.funcs) if (f.is_main) {
         func_now = &f;
         os << FUNC_PRE "main:\n";
+        if (prog.gp_used) {
+            if (DATA_BASE & 0xffff)
+                os << INDENT "li $gp, " << DATA_BASE << '\n';
+            else
+                os << INDENT "lui $gp, " << (DATA_BASE >> 16) << '\n';
+        }
         FOR_BB (bb, f) {
             os << *bb << ":\n";
             FOR_INST (i, *bb) {
@@ -166,7 +172,7 @@ void MoveInst::print(std::ostream &os) const {
     // TODO: pseudo insts are used, hence use of $at is forbidden
     asserts(dst.is_reg());
     if (src.is_const())
-        os << "li ";
+        os << "li ";  // TODO: li is not implemented optimally, better do it ourselves
     else
         os << "move ";
     os << dst << ", " << src;

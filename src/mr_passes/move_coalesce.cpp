@@ -4,8 +4,7 @@ using namespace mips;
 
 void move_coalesce(Func *f) {
     FOR_BB (bb, *f) {
-        for (auto *i = bb->insts.front; i; ) {
-            auto *next = i->next;
+        FOR_LIST_MUT (i, bb->insts) {
             if_a (BinaryInst, x, i) {
                 if ((x->op == BinaryInst::Add || x->op == BinaryInst::Sub || x->op == BinaryInst::Xor) &&
                     x->rhs == Operand::make_const(0)) {
@@ -21,7 +20,6 @@ void move_coalesce(Func *f) {
                     delete i;
                 }
             }
-            i = next;
         }
     }
 }

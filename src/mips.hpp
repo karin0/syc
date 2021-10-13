@@ -17,6 +17,8 @@ struct BinaryInst;
 // Too tiny to put on the heap, so not using an abstract class
 typedef Operand Reg;
 
+constexpr uint DATA_BASE = 0x10010000u;
+
 struct BB : Node<BB> {
     List<Inst> insts;
     vector<BB *> succ;
@@ -68,6 +70,7 @@ struct Prog {
     vector<Func> funcs;
     ir::Prog *ir;
     std::unordered_map<string, uint> strs;
+    bool gp_used = false;
     // fmts should be put after globs in generated asm
 
     explicit Prog(ir::Prog *ir);

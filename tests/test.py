@@ -9,6 +9,8 @@ import multiprocessing
 import concurrent.futures as futures
 from datetime import datetime
 
+now = datetime.now()
+
 cases_root = '/home/karin0/lark/buaa/ct/cases'
 project_dir = '/home/karin0/lark/buaa/ct/syc'
 mars_path = '/home/karin0/lark/buaa/ct/mars.jar'
@@ -238,11 +240,18 @@ def key0(a):
 
 
 def main():
-    now = datetime.now()
+
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        fail = 'f' in arg
+        no_stat = 'n' in arg
+        if not (fail or no_stat):
+            raise ValueError('invalid args')
+    else:
+        fail = no_stat = False
+
     print(cpu_count, 'cores found')
     build()
-
-    fail = len(sys.argv) > 1
 
     if fail:
         cases = get_fail_cases()
@@ -258,7 +267,7 @@ def main():
             fut.result()
         dt = time.time() - dt
 
-    if not fail and stats:
+    if not fail and not no_stat and stats:
         mkdir('stats')
         os.chdir('stats')
 
@@ -276,7 +285,7 @@ def main():
         data = [head] + [[src] + stat for src, stat in sts]
         write_csv(fn, data)
 
-        now = now.strftime('%m-%d %H:%M:%S')
+        tim = now.strftime('%m-%d %H:%M:%S')
         sts = [(src, stat[-2]) for src, stat in sts]
 
         if path.isfile(results_file):
@@ -295,9 +304,9 @@ def main():
                     row.append(fc)
             rows = list(row_map.values())
             rows.sort(key=key0)
-            data = [old_data[0] + [now]] + rows
+            data = [old_data[0] + [tim]] + rows
         else:
-            data = [['Case', now]] + [[src, fc] for src, fc in sts]
+            data = [['Case', tim]] + [[src, fc] for src, fc in sts]
 
         write_csv(results_file, data)
 
