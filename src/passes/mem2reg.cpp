@@ -11,25 +11,6 @@ static void traverse(BB *u, BB *block) {
 }
 
 void build_dom(Func *f) {
-    FOR_BB (u, *f)
-        u->vis = false;
-
-    traverse(f->bbs.front, nullptr);
-    for (auto *u = f->bbs.front; u; ) {
-        auto *next = u->next;
-        if (!u->vis) {
-            warnf("found unreachable bb", u->id);
-            for (auto *i = u->insts.front; i; ) {
-                auto next_i = i->next;
-                delete i;
-                i = next_i;
-            }
-            f->bbs.erase(u);
-            delete u;
-        }
-        u = next;
-    }
-
     FOR_BB (u, *f) {
         u->dom.clear();
         u->idom = nullptr;

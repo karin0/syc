@@ -2,15 +2,17 @@
 
 using namespace ir;
 
-void mem2reg(Func *);
+void dbe(Func *);
 void dce(Func *);
+void mem2reg(Func *);
 
 void run_passes(Prog &prog) {
     auto run = [&](void (*p)(Func *)) {
         for (auto &func : prog.funcs)
             p(&func);
     };
-    run(dce);  // must do this first to remove unreachable branch/jumps so that the correct CFG can be produced
+    run(dbe);  // remove unreachable branch/jumps so that the correct CFG can be produced
+    run(dce);
     run(mem2reg);
-    run(dce);  // this is required or things can break
+    run(dce);  // TODO: this is required or things break
 }
