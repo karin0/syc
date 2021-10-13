@@ -334,7 +334,9 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
         return Operand::make_void();
     }
     uint n = args.size();
-    ctx->func->max_call_arg_num = std::max(ctx->func->max_call_arg_num, n);
+    if (n > MAX_ARG_REGS)
+        ctx->func->max_call_arg_num = std::max(ctx->func->max_call_arg_num, n - MAX_ARG_REGS);
+    // ctx->func->max_call_arg_num = std::max(ctx->func->max_call_arg_num, n);
     for (uint i = 0; i < n; ++i) {
         auto arg = BUILD_USE(args[i]);
         if (i < MAX_ARG_REGS)
@@ -394,6 +396,7 @@ static int int_cast(uint x) {
 }
 
 std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
+    // TODO: use sp when base is alloca
     if (off.kind == Operand::Const) {
         if (base.kind == Operand::Const) {
             // TODO: what if imm overflows?
@@ -580,7 +583,7 @@ Prog build_mr(ir::Prog &ir) {
             ibb->mbb = func->new_bb();
 
         auto *bb_start = func->bbs.front;
-        uint n = std::min(fun.params.size(), MAX_ARG_REGS);
+        uint n = std::min(uint(fun.params.size()), MAX_ARG_REGS);
         for (size_t i = 0; i < n; ++i) {
             auto src = Operand::make_pinned(Regs::a0 + i);
             auto dst = func->make_vreg();

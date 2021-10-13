@@ -3,7 +3,7 @@
 #include "ir.hpp"
 #include <unordered_map>
 
-const size_t MAX_ARG_REGS = 4;
+const uint MAX_ARG_REGS = 4;
 
 namespace mips {
 

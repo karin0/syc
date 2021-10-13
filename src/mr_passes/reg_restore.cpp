@@ -17,6 +17,7 @@ void reg_restore(Func *f) {
             s_regs.insert(Regs::ra);
     }
 
+    // as the stack layout
     uint stack_size = (f->max_call_arg_num + f->alloca_num + f->spill_num + s_regs.size()) << 2;
     std::fprintf(stderr, "%s has stack size %u (%u args, %u allocas, %u spills, %zu s-regs)\n",
          f->ir->name.data(), stack_size, f->max_call_arg_num, f->alloca_num, f->spill_num, s_regs.size());

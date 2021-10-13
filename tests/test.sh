@@ -70,8 +70,7 @@ for s in cases/hw1/out/testfile*; do
 done
 
 # A, B, C done !!
-# modified: C/7, B/忘了，A/8
-# 最好把错的都修了
+# modified: C/7, B/忘了，A/8, B/18(a[-1]), B/19, B/1 (args eval order), A/3, A/26, A/19, A/13
 for s in cases/20210926163332268/testfiles/*/testfile*; do
     dir=$(dirname "$s")
     base=$(basename "$s")

@@ -24,7 +24,7 @@ std::pair<vector<Reg>, vector<Reg>> get_def_use(Inst *i, Func *f) {
         return {{x->dst}, {}};
     else if_a (CallInst, x, i) {
         vector<Reg> def, use;
-        uint n = std::min(x->func->params.size(), MAX_ARG_REGS);
+        uint n = std::min(uint(x->func->params.size()), MAX_ARG_REGS);
         for (auto i: Regs::caller_saved)  // sp, ra are not allocation candidates
             def.emplace_back(Reg::Pinned, i);
         for (uint i = 0; i < n; ++i)

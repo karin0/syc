@@ -108,16 +108,9 @@ def _run(rid, src_file, in_file, ans_file):
 
     msg(f'src copied to {shutil.copy(src_file, case_fn)}')
 
-    msg('compiling')
-    subprocess.run(
-        [syc_path, path.realpath(src_file), '-o', path.realpath(asm_fn)],
-        timeout=compile_timeout,
-        check=True,
-        cwd=rid
-    )
-
     if not in_file:
         msg('no input file')
+        in_file = os.devnull
 
     with open(in_file, encoding='utf-8') as fp:
         with open(in_fn, 'w', encoding='utf-8') as in_fp:
@@ -125,6 +118,14 @@ def _run(rid, src_file, in_file, ans_file):
                 for x in line.split():
                     in_fp.write(x)
                     in_fp.write('\n')
+
+    msg('compiling')
+    subprocess.run(
+        [syc_path, path.realpath(src_file), '-o', path.realpath(asm_fn)],
+        timeout=compile_timeout,
+        check=True,
+        cwd=rid
+    )
 
     with open(in_fn, 'rb') as in_fp:
         if not ans_file:
@@ -240,11 +241,10 @@ def key0(a):
 
 
 def main():
-
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         fail = 'f' in arg
-        no_stat = 'n' in arg
+        no_stat = fail or 'n' in arg
         if not (fail or no_stat):
             raise ValueError('invalid args')
     else:
@@ -267,7 +267,7 @@ def main():
             fut.result()
         dt = time.time() - dt
 
-    if not fail and not no_stat and stats:
+    if not no_stat and stats:
         mkdir('stats')
         os.chdir('stats')
 
