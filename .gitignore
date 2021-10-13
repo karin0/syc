@@ -58,4 +58,7 @@ cmake-build-*
 
 /tests/out
 /tests/build
+/tests/stats
+/tests/old_stats
+/tests/**/*.c
 *.csv
