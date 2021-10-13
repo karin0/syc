@@ -17,4 +17,4 @@ add_definitions(
 file(GLOB_RECURSE src_files "src/*")
 include_directories(src)
 
-add_executable(syc ${src_files} src/mr_passes/use_def.cpp src/mr_passes/use_def.hpp src/mr_passes/reg_restore.cpp src/mr_passes/move_coalesce.cpp)
+add_executable(syc ${src_files})
