@@ -291,6 +291,7 @@ def main():
         if path.isfile(results_file):
             shutil.copy2(results_file, results_file + '.old.csv')
             old_data = read_csv(results_file)
+            # TODO: this logic needs fixing, when some row has the last column empty
             row_map = {}
             for row in old_data[1:]:
                 src = row[0]

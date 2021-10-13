@@ -4,6 +4,7 @@
 namespace mips {
 
 const Func *func_now;
+const uint *str_addr;
 
 std::ostream &operator << (std::ostream &os, const BB &bb) {
     if (func_now)
@@ -65,12 +66,18 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
 
     uint n = prog.strs.size();
     auto *strs = new const string *[n];
+    auto *addrs = new uint[n];
     for (auto &p: prog.strs)
         strs[p.second] = &p.first;
-
+    uint data = prog.str_base_addr;
+    for (uint i = 0; i < n; ++i) {
+        addrs[i] = data;
+        data += strs[i]->size() + 1 - std::count(strs[i]->begin(), strs[i]->end(), '\\');
+    }
     for (uint i = 0; i < n; ++i)
         os << INDENT STR_PRE << i << ": .asciiz \"" << *strs[i] << "\"\n";
     delete []strs;
+    str_addr = addrs;
 
     os << "\n.text\n";
 
@@ -111,6 +118,9 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     }
     os << END_LABEL << ":\n";
     func_now = nullptr;
+    str_addr = nullptr;
+    delete []addrs;
+
     return os;
 }
 
@@ -285,7 +295,10 @@ SysInst::SysInst(uint no) : no(no) {}
 void LoadStrInst::print(std::ostream &os) const {
     // TODO: la is not optimal too
     asserts(dst.is_reg());
-    os << "la " << dst << ", " STR_PRE << id;
+    if (str_addr)
+        put_li(os, dst, int(str_addr[id]));
+    else
+        os << "la " << dst << ", " STR_PRE << id;
 }
 
 }

@@ -27,8 +27,15 @@ struct Builder {
 
     Operand ensure_reg(Operand x) {
         asserts(x.kind != Operand::Void);
-        if (x.kind == Operand::Const)
-            return x.val ? move_to_reg(x) : Operand::make_pinned(0);
+        if (x.kind == Operand::Const) {
+            if (x.val == 0)
+                return Operand::make_pinned(0);
+            if (x.val == DATA_BASE) {
+                prog->gp_used = true;
+                return Operand::make_pinned(Regs::gp);
+            }
+            return move_to_reg(x);
+        }
         return x;
     }
 
@@ -561,6 +568,7 @@ Prog build_mr(ir::Prog &ir) {
         glob->addr = data;
         data += glob->size() << 2;
     }
+    res.str_base_addr = data;
 
     Builder ctx;
     ctx.prog = &res;
