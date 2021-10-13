@@ -289,7 +289,7 @@ struct StoreInst : AccessInst {
 };
 
 struct SysInst : Inst {
-    uint no;  // 1, 4, 5
+    uint no;  // 1, 4, 5, 11 are used, see use_def
 
     explicit SysInst(uint no);
 

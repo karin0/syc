@@ -36,6 +36,13 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
 #define FUNC_PRE "__FUN_"
 #define INDENT "    "
 
+static void put_li(std::ostream &os, Reg dst, int src) {
+    if (src & 0xffff)
+        os << "li " << dst << ", " << src;
+    else
+        os << "lui " << dst << ", " << (src >> 16);
+}
+
 std::ostream &operator << (std::ostream &os, const Prog &prog) {
     os << ".data\n";
     for (auto &g: prog.ir->globals) {
@@ -71,10 +78,9 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
         func_now = &f;
         os << FUNC_PRE "main:\n";
         if (prog.gp_used) {
-            if (DATA_BASE & 0xffff)
-                os << INDENT "li $gp, " << DATA_BASE << '\n';
-            else
-                os << INDENT "lui $gp, " << (DATA_BASE >> 16) << '\n';
+            os << INDENT;
+            put_li(os, Reg::make_machine(Regs::gp), DATA_BASE);
+            os << '\n';
         }
         FOR_BB (bb, f) {
             os << *bb << ":\n";
@@ -171,11 +177,12 @@ void ShiftInst::print(std::ostream &os) const {
 void MoveInst::print(std::ostream &os) const {
     // TODO: pseudo insts are used, hence use of $at is forbidden
     asserts(dst.is_reg());
-    if (src.is_const())
-        os << "li ";  // TODO: li is not implemented optimally, better do it ourselves
-    else
-        os << "move ";
-    os << dst << ", " << src;
+    if (src.is_const()) {
+        // TODO: li is not implemented optimally, better do it ourselves
+        put_li(os, dst, src.val);
+        return;
+    }
+    os << "move " << dst << ", " << src;
 }
 
 void MultInst::print(std::ostream &os) const {
@@ -276,6 +283,7 @@ void SysInst::print(std::ostream &os) const {
 SysInst::SysInst(uint no) : no(no) {}
 
 void LoadStrInst::print(std::ostream &os) const {
+    // TODO: la is not optimal too
     asserts(dst.is_reg());
     os << "la " << dst << ", " STR_PRE << id;
 }

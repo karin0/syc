@@ -18,5 +18,5 @@ void run_mips_passes(mips::Prog &prog) {
     run(move_coalesce);
     run(reg_restore);
 
-    // TODO: movz, movn; reduce syscall lis; alloc sp
+    // TODO: movz, movn; madd; reduce syscall lis; alloc sp
 }

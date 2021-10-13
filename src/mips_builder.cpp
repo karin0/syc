@@ -130,6 +130,8 @@ static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {  // TODO
     asserts(lh.is_reg());
     if (rh == 0)
         return Operand::make_const(0);
+    if (rh == 1)
+        return lh;
     bool neg = rh < 0;
     uint rhu = rh;
     if (neg)
@@ -274,6 +276,18 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
     }
 }
 
+void build_buf_output(const string &s, Builder *ctx) {
+    if (s.size() == 1 || s == "\\n") {
+        int c = s.size() == 1 ? s[0] : '\n';
+        ctx->push(new MoveInst{Operand::make_pinned(Regs::a0), Operand::make_const(c)});
+        ctx->new_syscall(11);
+    } else {
+        uint id = ctx->prog->find_str(s);
+        ctx->push(new LoadStrInst{Operand::make_pinned(Regs::a0), id});
+        ctx->new_syscall(4);
+    }
+}
+
 Operand ir::CallInst::build(mips::Builder *ctx) {
     if (is_a<ir::GetIntFunc>(func)) {
         ctx->new_syscall(5);
@@ -300,9 +314,7 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
                 buf += std::to_string(int(arg.val));
             else {
                 if (!buf.empty()) {
-                    uint id = ctx->prog->find_str(buf);
-                    ctx->push(new LoadStrInst{Operand::make_pinned(Regs::a0), id});
-                    ctx->new_syscall(4);
+                    build_buf_output(buf, ctx);
                     buf.clear();
                 }
                 ctx->push(new MoveInst{Operand::make_pinned(Regs::a0), arg});
@@ -310,12 +322,8 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
             }
             p += 2;
         }
-        if (!buf.empty()) {
-            uint id = ctx->prog->find_str(buf);
-            ctx->push(new LoadStrInst{Operand::make_pinned(Regs::a0), id});
-            ctx->new_syscall(4);
-            buf.clear();
-        }
+        if (!buf.empty())
+            build_buf_output(buf, ctx);
         return Operand::make_void();
     }
     uint n = args.size();
@@ -381,7 +389,7 @@ static int int_cast(uint x) {
 std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
     if (off.kind == Operand::Const) {
         if (base.kind == Operand::Const) {
-            // TODO: what if imm overflow?
+            // TODO: what if imm overflows?
             int d = base.val + off.val, imm;
             if (!is_imm(d) && is_imm(imm = int_cast(uint(d) - DATA_BASE))) {
                 ctx->prog->gp_used = true;
@@ -391,7 +399,7 @@ std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
         }
         return {base, off.val};
     }
-    // TODO: MARS will do the trick when the offset overflows imm, but not optimally
+    // TODO: MARS will do the trick when the offset overflows imm (one more lui $at)
     // To allocate $at, we must do it explicitly
     if (base.kind == Operand::Const)
         return {off, base.val};
@@ -417,7 +425,7 @@ Operand ir::StoreInst::build(mips::Builder *ctx) {
 }
 
 Operand ir::GEPInst::build(mips::Builder *ctx) {
-    // dst = base + off * size * 4
+    // dst = base + off * size
     auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     using mips::BinaryInst;
     if (off.kind == Operand::Const) {
