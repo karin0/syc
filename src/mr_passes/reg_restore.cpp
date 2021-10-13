@@ -30,6 +30,10 @@ void reg_restore(Func *f) {
     auto *push = new BinaryInst{BinaryInst::Add,
         Reg::make_machine(Regs::sp), Reg::make_machine(Regs::sp), Operand::make_const(-int(stack_size))
     };
+
+    if (f->is_main)
+        return;
+
     auto *bb_start = f->bbs.front;
     bb_start->insts.push_front(push);
 
@@ -52,10 +56,10 @@ void reg_restore(Func *f) {
                 });
                 p += 4;
             }
-            if (!f->is_main)
-                bb->insts.insert(x, new BinaryInst{BinaryInst::Add,
-                   Reg::make_machine(Regs::sp), Reg::make_machine(Regs::sp), Operand::make_const(int(stack_size))
-                });
+            bb->insts.insert(x, new BinaryInst{BinaryInst::Add,
+               Reg::make_machine(Regs::sp), Reg::make_machine(Regs::sp), Operand::make_const(int(stack_size))
+            });
+            // break;
         }
     }
 }

@@ -46,7 +46,7 @@ struct Builder {
     }
 
     // used when rhs could be an overflowed const
-    BinaryInst *new_binary(BinaryInst::Op op, Reg dst, Reg lhs, Reg rhs) {
+    BinaryInst *new_binary(BinaryInst::Op op, Reg dst, Reg lhs, Operand rhs) {
         asserts(lhs.kind != Operand::Const);
         asserts(lhs.kind != Operand::Void);
         asserts(rhs.kind != Operand::Void);
@@ -109,7 +109,7 @@ ir::OpKind swapped_op(ir::OpKind op) {
         case Le: return Ge;
         case Ge: return Le;
         default:
-            fatal("unswappable op");
+            unreachable();
     }
 }
 
@@ -279,7 +279,7 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         }
 
         default:
-            fatal("unexpected ir binary op");
+            unreachable();
     }
 }
 
@@ -455,8 +455,7 @@ Operand ir::AllocaInst::build(mips::Builder *ctx) {
     auto *add = ctx->new_binary(mips::BinaryInst::Add, dst,
         Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
     infof("alloca val", add->rhs.val);
-    // TODO: siz?
-    // TODO: fix with max_call_arg_num
+    // will be fixed with max_call_arg_num
     ctx->func->allocas.push_back(add);
     ctx->func->alloca_num += var->size();
     return dst;

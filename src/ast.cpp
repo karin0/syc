@@ -37,7 +37,7 @@ Binary::Binary(TokenKind op, Expr *lh, Expr *rh):
     op(op), lhs(lh), rhs(rh) {}
 
 int Expr::eval() {
-    fatal("%s cannot be evaluated", typeid(this).name());
+    unreachable();
 }
 
 int ast::evals(Expr **e) {
