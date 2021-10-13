@@ -128,8 +128,6 @@ void BinaryBranchInst::print(std::ostream &os) {
 }
 
 #define INDENT      "    "
-#define INDENT_2    "        "
-#define INDENT_3    "            "
 
 std::ostream &operator << (std::ostream &os, const Prog &prog) {
     os << ".globals:\n";

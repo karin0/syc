@@ -2,21 +2,21 @@
 #include "common.hpp"
 #include "prompt.hpp"
 #include "ir_builder.hpp"
-#include "passes.hpp"
 #include "mips_builder.hpp"
+#include "passes.hpp"
 
 #include <iostream>
 #include <fstream>
-#include <cstring>
-#include <cerrno>
 
 constexpr const char *input_file = "testfile.txt";
 constexpr const char *output_file = "output.txt";
 
 string read_file(const char *file) {
     std::ifstream inf(file, std::ios::binary | std::ios::ate);
-    if (!inf)
-        fatal("Cannot open input file: %s", std::strerror(errno));
+    if (!inf) {
+        std::perror("Cannot open input file");
+        std::exit(1);
+    }
     auto size = inf.tellg();
     info("input file has size %d", size);
     inf.seekg(0);
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     info("debug build");
 #endif
 
-    info("read %d bytes", src.size());
+    info("read %zu bytes", src.size());
 
     vector<Token> tokens = lex(&src[0]);
     ast::Prog ast = parse(tokens);
@@ -104,5 +104,6 @@ int main(int argc, char **argv) {
     }
     *out << mr;
 
+    info("bye");
     return 0;
 }

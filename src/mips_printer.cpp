@@ -156,6 +156,8 @@ void ShiftInst::print(std::ostream &os) const {
         case Rl:
             os << "srl ";
             break;
+        default:
+            unreachable();
     }
     os << dst << ", " << lhs << ", " << rhs;
 }
@@ -206,6 +208,8 @@ void BranchInst::print(std::ostream &os) const {
         case Ne:
             os << "bne ";
             break;
+        default:
+            unreachable();
     }
     os << lhs << ", " << rhs << ", " << *to;
 }
@@ -231,6 +235,8 @@ void BranchZeroInst::print(std::ostream &os) const {
         case Op::Ge:
             os << "bgez ";
             break;
+        default:
+            unreachable();
     }
     os << lhs << ", " << *to;
 }

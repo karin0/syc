@@ -162,9 +162,9 @@ Value *ast::Binary::build(Builder *ctx) {
     // regardless of side effects
     if (op == tkd::Add) {
         CHK(lh, 0, rh)
-        else CHK(rh, 0, lh);
+        else CHK(rh, 0, lh)
     } else if (op == tkd::Sub) {
-        CHK(rh, 0, lh);
+        CHK(rh, 0, lh)
     } else if (op == tkd::Mul) {
         if (auto *x = as_a<Const>(lh)) {
             if (x->val == 0)
@@ -179,10 +179,10 @@ Value *ast::Binary::build(Builder *ctx) {
         }
     } else if (op == tkd::Div) {
         CHK(lh, 0, &Const::ZERO)
-        else CHK(rh, 1, lh);
+        else CHK(rh, 1, lh)
     } else if (op == tkd::Mod) {
         CHK(lh, 0, &Const::ZERO)
-        else CHK(rh, 1, &Const::ZERO); // TODO: right?
+        else CHK(rh, 1, &Const::ZERO) // TODO: right?
     }
 
     return ctx->push(new BinaryInst{op, lh, rh});
