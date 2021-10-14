@@ -38,10 +38,16 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
 #define INDENT "    "
 
 static void put_li(std::ostream &os, Reg dst, int src) {
-    if (src & 0xffff)
-        os << "li " << dst << ", " << src;
-    else
+    // if (src & 0xffff) ??
+    if (!(src & 0xffff))
         os << "lui " << dst << ", " << (src >> 16);
+    else {
+        int i;
+        if (is_imm(i = (src ^ int(DATA_BASE))))
+            os << "xori " << dst << ", $gp, " << i;
+        else
+            os << "li " << dst << ", " << src;
+    }
 }
 
 std::ostream &operator << (std::ostream &os, const Prog &prog) {
@@ -65,6 +71,7 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     os << '\n';
 
     uint n = prog.strs.size();
+    // bool gp_used = prog.gp_used || n;  // a little conservative
     auto *strs = new const string *[n];
     auto *addrs = new uint[n];
     for (auto &p: prog.strs)
@@ -84,11 +91,11 @@ std::ostream &operator << (std::ostream &os, const Prog &prog) {
     for (auto &f : prog.funcs) if (f.is_main) {
         func_now = &f;
         os << FUNC_PRE "main:\n";
-        if (prog.gp_used) {
-            os << INDENT;
-            put_li(os, Reg::make_machine(Regs::gp), DATA_BASE);
-            os << '\n';
-        }
+        // if (gp_used) {
+        os << INDENT;
+        put_li(os, Reg::make_machine(Regs::gp), DATA_BASE);
+        os << '\n';
+         // }
         FOR_BB (bb, f) {
             os << *bb << ":\n";
             FOR_INST (i, *bb) {
@@ -188,7 +195,7 @@ void MoveInst::print(std::ostream &os) const {
     // TODO: pseudo insts are used, hence use of $at is forbidden
     asserts(dst.is_reg());
     if (src.is_const()) {
-        // TODO: li is not implemented optimally, better do it ourselves
+        // li is not implemented optimally (generates ori 0 and ignores gp)
         put_li(os, dst, src.val);
         return;
     }
@@ -293,7 +300,7 @@ void SysInst::print(std::ostream &os) const {
 SysInst::SysInst(uint no) : no(no) {}
 
 void LoadStrInst::print(std::ostream &os) const {
-    // TODO: la is not optimal too
+    // la is not optimal
     asserts(dst.is_reg());
     if (str_addr)
         put_li(os, dst, int(str_addr[id]));
