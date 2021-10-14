@@ -513,7 +513,8 @@ Operand ir::BinaryBranchInst::build(mips::Builder *ctx) {
                     ctx->push(new BinaryInst{BinaryInst::Lt, t, rh, lh});
                 br = new BranchInst{
                     op == Lt || op == Gt ? BranchInst::Ne : BranchInst::Eq,
-                    t, r0, to};
+                    t, r0, to
+                };
             }
         }
     } else {
@@ -597,46 +598,91 @@ Prog build_mr(ir::Prog &ir) {
             ctx.bb = ibb->mbb;
             FOR_INST (i, *ibb)
                 i->mach_res = i->build(&ctx);
-            for (auto *t: ibb->get_succ())
-                ibb->mbb->succ.push_back(t->mbb);
+            // for (auto *t: ibb->get_succ())
+            //     ibb->mbb->succ.push_back(t->mbb);
+            // do this later since bbs may be split
         }
 
         FOR_BB (ibb, fun) {
             auto *bb = ibb->mbb;
-            auto *head = bb->insts.front;
             infof("ibb", ibb);
             FOR_INST (i, *ibb) {
                 infof("ibb inst", ibb, i);
                 if_a (ir::PhiInst, x, i) {
                     auto t = func->make_vreg();
-                    if (head)
-                        bb->insts.insert(head, new MoveInst{x->mach_res, t});
-                    else
-                        bb->insts.push(new MoveInst{x->mach_res, t});
+                    bb->insts.push_front(new MoveInst{x->mach_res, t});
                     for (auto &u: x->vals) {
-                        auto *uv = u.first.value;
+                        auto *uv = u.first.value;  // TODO: undef should be eliminated in ir passes
                         auto *ubb = u.second->mbb;
 
-                        bool br = false;
+                        bool found = false;
+                        bool no_fall = false;
                         ctx.bb = ubb;
-                        FOR_INST (j, *ubb) {
+                        FOR_LIST_MUT (j, ubb->insts) {
+                            if (is_a<mips::ReturnInst>(j)) {
+                                no_fall = true;
+                                break;
+                            }
                             if_a (mips::ControlInst, y, j) {
                                 info("%p, got br to mbb_%u, i am %u", j, y->to->id, bb->id);
                                 if (y->to == bb) {
-                                    br = true;
+                                    found = true;
+                                    /*
+                                    if (after_control) {  // rarely
+                                        ctx.bb = func->new_bb_after(ubb);
+                                        ctx.push(new MoveInst{t, uv->build_val(&ctx)});
+                                        for (Inst *k = y, *next; k; k = next) {
+                                            next = k->next;
+                                            ubb->insts.erase(k);
+                                            ctx.push(k);
+                                        }
+                                    } else {
+                                     */
                                     ctx.push_point = y;
                                     ctx.push(new MoveInst{t, uv->build_val(&ctx)});
                                     ctx.push_point = nullptr;
                                     break;
+                                } else if (is_a<mips::JumpInst>(y)) {
+                                    no_fall = true;
+                                    break;
                                 }
                             }
                         }
-                        if (!br && bb->prev == ubb)  // prev != ubb when branch to bb is removed during codegen
+                        if (!found && !no_fall && bb->prev == ubb) {
+                            // prev != ubb when branch to bb is removed during codegen and no need to copy
+                            // val will not have side effects
+                            // TODO: do a bb split separately, or bb->prev will break
+                            /* if (after_control) {
+                                ctx.bb = func->new_bb_after(ubb);
+                                ctx.push(new MoveInst{t, uv->build_val(&ctx)});
+                            } else */
                             ubb->push(new MoveInst{t, uv->build_val(&ctx)});
+                        }
                     }
                 } else
                     break;
             }
+        }
+
+        // TODO: normalize every bb to [other..] [br..] [jump/return] by splitting
+
+        // TODO: this method may push duplicated bbs
+        FOR_LIST_MUT (bb, func->bbs) {
+            bool fall = true;
+            FOR_INST (i, *bb) {
+                if (is_a<ReturnInst>(i)) {
+                    fall = false;
+                    break;
+                } else if_a (ControlInst, x, i) {
+                    bb->succ.push_back(x->to);
+                    if (is_a<JumpInst>(x)) {
+                        fall = false;
+                        break;
+                    }
+                }
+            }
+            if (fall && bb->next)
+                bb->succ.push_back(bb->next);
         }
 
         for (auto *x: func->allocas) {

@@ -45,9 +45,9 @@ std::pair<vector<Reg>, vector<Reg>> get_def_use(Inst *i, Func *f) {
     else if_a (SysInst, x, i) {
         switch (x->no) {
             case 1: case 4: case 11:
-                return {{}, {Reg::make_pinned(Regs::a0)}};
+                return {{}, {Reg::make_pinned(Regs::v0), Reg::make_pinned(Regs::a0)}};
             case 5:
-                return {{Reg::make_pinned(Regs::v0)}, {}};
+                return {{Reg::make_pinned(Regs::v0)}, {Reg::make_pinned(Regs::v0)}};
             default:
                 unreachable();
         }

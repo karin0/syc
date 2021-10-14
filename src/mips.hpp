@@ -61,6 +61,7 @@ struct Func {
     explicit Func(ir::Func *ir);
 
     BB *new_bb();
+    BB *new_bb_after(BB *o);
     Reg make_vreg();
 };
 
@@ -137,7 +138,12 @@ namespace Regs {
 
 struct Inst : Node<Inst> {
     virtual ~Inst() = default;
+
+    bool is_pure() const;
+
     virtual void print(std::ostream &) const = 0;
+
+    friend std::ostream &operator << (std::ostream &, const Inst &);
 };
 
 struct BinaryInst : Inst {  // add, sub, slt ?
@@ -262,6 +268,7 @@ struct JumpInst : ControlInst {
     void print(std::ostream &) const override;
 };
 
+// Return is irrelevant to function CFG and thus not ControlInst
 struct ReturnInst : Inst {
     void print(std::ostream &) const override;
 };

@@ -183,8 +183,8 @@ void PhiInst::push(Value *val, BB *bb) {
     vals.emplace_back(Use{val, this}, bb);
 }
 
-// TODO: add others
 bool Inst::is_pure() const {
+    // TODO: CallInst to pure funcs
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
             || is_a<PhiInst>(this);
 }

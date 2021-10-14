@@ -31,6 +31,11 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
     return os;
 }
 
+std::ostream &operator << (std::ostream &os, const Inst &i) {
+    i.print(os);
+    return os;
+}
+
 #define END_LABEL "__END"
 #define GLOB_PRE "__GLO_"
 #define STR_PRE "__STR_"

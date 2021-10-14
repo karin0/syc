@@ -70,6 +70,13 @@ BB *Func::new_bb() {
     return bb;
 }
 
+BB *Func::new_bb_after(BB *o) {
+    auto *bb = new BB;
+    bb->id = bb_cnt++;
+    bbs.insert_after(o, bb);
+    return bb;
+}
+
 Operand Func::make_vreg() {
     return Operand::make_virtual(vreg_cnt++);
 }
@@ -206,5 +213,12 @@ LoadInst::LoadInst(Reg dst, Reg base, int off) : AccessInst(base, off), dst(dst)
 StoreInst::StoreInst(Reg src, Reg base, int off) : AccessInst(base, off), src(src) {}
 
 LoadStrInst::LoadStrInst(Reg dst, uint id) : dst(dst), id(id) {}
+
+bool Inst::is_pure() const {
+    // TODO: CallInst to pure funcs, but not so easy to eliminate
+    return is_a<BinaryInst>(this) || is_a<ShiftInst>(this) || is_a<MoveInst>(this)
+           || is_a<MFLoInst>(this) || is_a<MFHiInst>(this) || is_a<LoadInst>(this)
+           || is_a<LoadStrInst>(this);
+}
 
 }

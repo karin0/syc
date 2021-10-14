@@ -23,6 +23,9 @@ static std::pair<vector<Reg>, vector<Reg>> get_def_use_uncolored(Inst *i, Func *
     return r;
 }
 
+// TODO: this may be unreliable, as bbs now are not "real" bbs, but can contain j/brs due to phi resolving
+// that's possibly why dce on machine regs cannot be performed
+// maybe we should add phi copies at the beginning of the source bb (tested to affect perf) or in a new inserted bb
 static void liveness_analysis(Func *f) {
     FOR_BB (bb, *f) {
         bb->use.clear();
@@ -136,7 +139,17 @@ struct Allocater {
         // FOR_BB (bb, *func) { // TODO: ??
         for (auto *bb = func->bbs.back; bb; bb = bb->prev) {
             auto live = bb->live_out;
-            for (auto *i = bb->insts.back; i; i = i->prev) {
+            for (Inst *i = bb->insts.back, *prev; i; i = prev) {
+                prev = i->prev;
+                auto def_use = get_def_use_uncolored(i, func);
+                auto &def = def_use.first;
+                auto &use = def_use.second;
+                if (def.size() == 1 && def.front().is_virtual() && !live.count(def.front()) && i->is_pure()) {
+                    infof("erasing", *i);
+                    bb->insts.erase(i);
+                    delete i;
+                    continue;
+                }
                 if_a (MoveInst, x, i) if (!(is_ignored(x->src) || is_ignored(x->dst))) {
                     x->active = false;  // initialize active_moves
                     live.erase(x->src);
@@ -144,11 +157,8 @@ struct Allocater {
                     get_node(x->dst)->move_list.insert(x);
                     wl_moves.insert(x);
                 }
-                auto def_use = get_def_use_uncolored(i, func);
-                auto &def = def_use.first;
-                auto &use = def_use.second;
                 for (auto &d: def)
-                    live.insert(d);
+                    live.insert(d);  // the point is to insert them all to the graph
                 for (auto &d: def)
                     for (auto &l: live) {
                         if (d != l)
@@ -497,13 +507,36 @@ struct Allocater {
             } while (!(simplify_wl.empty() && wl_moves.empty() && freeze_wl.empty() && spill_wl.empty()));
             assign_colors();
             if (spilled_nodes.empty())
-                return;
+                break;
             rewrite_program();
             clear();
         }
+        clear();
     }
 };
 
+}
+
+void dce(Func *func) {
+    for (auto *bb = func->bbs.back; bb; bb = bb->prev) {
+        auto live = bb->live_out;
+        for (Inst *i = bb->insts.back, *prev; i; i = prev) {
+            prev = i->prev;
+            auto def_use = get_def_use(i, func);
+            auto &def = def_use.first;
+            auto &use = def_use.second;
+            if (def.size() == 1 && def.front().is_virtual() && !live.count(def.front()) && i->is_pure()) {
+                infof("dce erasing", *i);
+                bb->insts.erase(i);
+                delete i;
+                continue;
+            }
+            for (auto &d: def)
+                live.erase(d);
+            for (auto &u: use)
+                live.insert(u);
+        }
+    }
 }
 
 // TODO: alloc sp (or just use in mem insts)
