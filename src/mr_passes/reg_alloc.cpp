@@ -6,6 +6,7 @@ using namespace mips;
 using std::set;
 using std::unordered_map;
 
+// TODO: drop ignored, colored, Machine/Pinned
 static bool is_ignored(const Operand &x) {
     return !(x.is_virtual() || (x.is_pinned() && Regs::inv_allocatable[x.val] < 32));
 }
@@ -76,7 +77,7 @@ struct Node {
     uint degree = 0, color = 0x7f;
     Node *alias = nullptr;
     std::set<Node *> adj_list;
-    std::set<MoveInst *> move_list;  // TODO: why use a set?
+    std::set<MoveInst *> move_list;
     bool colored = false;  // colored_nodes
 };
 
