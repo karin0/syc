@@ -27,8 +27,10 @@ struct Token {
     TokenKind kind;
     const char *source;
     std::size_t len;
+    int ln;
 
-    Token(TokenKind k, const char *src, std::size_t n) : kind(k), source(src), len(n) {}
+    Token(TokenKind k, const char *src, std::size_t n, int ln) :
+        kind(k), source(src), len(n), ln(ln) {}
 
     const char *kind_name() const;
     bool is_a(TokenKind k) const;

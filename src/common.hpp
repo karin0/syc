@@ -82,9 +82,9 @@ void logf(const char *level, const char *fn, const char *suf, const Args&... arg
 #endif
 
 #ifdef SYC_ASSERTS
-void asserts(bool cond);
+    void asserts(bool cond);
 #else
-#define asserts(...) void(0)
+    #define asserts(...) void(0)
 #endif
 
 #define unreachable() fatal("unreachable")

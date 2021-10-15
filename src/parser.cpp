@@ -2,11 +2,18 @@
 #include "common.hpp"
 #include "prompt.hpp"
 #include "symbol.hpp"
+#include "util.hpp"
 
 using namespace tkd;
 using namespace ast;
 
-const int MAX_OP_LEVEL = 6, LEVEL_ADD = 2, LEVEL_OR = 6;
+#ifdef SYC_SYNTAX_PROMPT
+constexpr int MAX_OP_LEVEL = 6;
+static const char *level_sym[MAX_OP_LEVEL + 1] =
+        { "UnaryExp", "MulExp", "AddExp", "RelExp", "EqExp", "LAndExp", "LOrExp" };
+#endif
+
+constexpr int LEVEL_ADD = 2, LEVEL_OR = 6;
 
 static int level(TokenKind op) {
     switch (op) {
@@ -27,8 +34,31 @@ static int level(TokenKind op) {
     }
 }
 
-static const char *level_sym[MAX_OP_LEVEL + 1] =
-        { "UnaryExp", "MulExp", "AddExp", "RelExp", "EqExp", "LAndExp", "LOrExp" };
+HANDLE_ERR(
+bool check_args(const vector<Expr *> &args, const vector<Decl *> &params) {
+    uint n = args.size();
+    asserts(n == params.size());
+    for (uint i = 0; i < n; ++i) {
+        auto *arg = args[i];
+        auto *par = params[i];
+        if_a (LVal, x, arg) {
+            if (!x->var)  // allow null Decl * from ctx
+                return false;
+            if (x->var->dims.size() != x->dims.size() + par->dims.size())
+                return false;
+            if (par->dims.size() == 2 && par->dims[1] != x->var->dims[1])
+                return false;
+            continue;
+        }
+        if (!par->dims.empty())
+            return false;
+        if_a (Call, x, arg)
+            if (x->func && !x->func->returns_int)
+                return false;
+    }
+    return true;
+}
+)
 
 struct Parser {
     const Token *tok, *tok_end;
@@ -36,6 +66,18 @@ struct Parser {
 
     SymbolTable ctx;
     vector<ast::Printf *> printfs;
+
+#ifdef SYC_ERROR_PROMPT
+    bool cur_func_returns_int;
+    int while_stk = 0;
+    int last_ln = 0;
+
+    #define RLN int this_ln = tok->ln;
+    #define RLNS last_ln = std::max(last_ln, this_ln);
+#else
+    #define RLN
+    #define RLNS
+#endif
 
     explicit Parser(const std::vector<Token> &toks) :
         tok(toks.data()),
@@ -53,10 +95,12 @@ struct Parser {
 
     const Token *get_unchecked() {
         auto name = tok->kind_name();
-        // debug("getting token %s (%s)", name, string{tok->source, tok->len}.data());
+        debug("getting token %s (%s) at ln %d", name, string{tok->source, tok->len}.data(), tok->ln);
+#ifdef SYC_SYNTAX_PROMPT
         out << name << ' ';
         out.write(tok->source, tok->len);
         out << '\n';
+#endif
         return tok++;
     }
 
@@ -74,8 +118,28 @@ struct Parser {
     const Token *get_a(TokenKind k) {
         if (tok >= tok_end)
             fatal("expected %s (%d) but reached end", kind_name(k), k);
-        if (!tok->is_a(k))
+        if (!tok->is_a(k)) {
+
+#ifdef SYC_ERROR_PROMPT
+            if (k == Semi)
+                push_err('i', (tok - 1)->ln);
+            else if (k == RPar)
+                push_err('j', (tok - 1)->ln);
+            else if (k == RBrk)
+                push_err('k', (tok - 1)->ln);
+            else
+                throw std::exception{};
+            return nullptr;
+#else
             fatal("expected %s (%d) but got %s (%d)", kind_name(k), k, kind_name(tok->kind), tok->kind);
+#endif
+
+        }
+
+        HANDLE_ERR(
+            if (k == Int)
+                last_ln = std::max(last_ln, tok->ln);
+        )
 
         return get_unchecked();
     }
@@ -97,20 +161,54 @@ struct Parser {
         return p < tok_end && p->kind == k;
     }
 
-    template <typename T>
-    void insert_symbols(std::vector<T> &decls) {
-        // This requires that provided container is active and don't
-        // change within the lifetime of the symbol table.
-        for (T &x : decls)
-            ctx.insert(x);
+HANDLE_ERR(
+    const Token *peek_last() const {
+        return tok - 1;
+    }
+)
+
+#ifdef SYC_SYNTAX_PROMPT
+    #define REPORT(sym) RLNS (out << "<" sym ">\n")
+    #define REPORT_S(sym) RLNS (out << "<" << (sym) <<  ">\n")
+#else
+    #define REPORT(sym) RLNS void(0)
+    #define REPORT_S(sym) RLNS void(0)
+#endif
+
+    void ctx_insert(Symbol *s, const Token *ident) {
+        // TODO: ignore or override?
+        if (!ctx.insert(s)) {
+
+#ifdef SYC_ERROR_PROMPT
+            push_err('b', ident->ln);
+#else
+            (void)(ident);
+            fatal("redefined symbol %s", s->name.data());
+#endif
+
+        }
     }
 
-#define REPORT(sym) (out << "<" sym ">\n")
-#define REPORT_S(sym) (out << "<" << (sym) <<  ">\n")
+    template <class T>
+    T *ctx_find(const Token *ident) const {
+        string s{*ident};
+        T *res = ctx.find_a<T>(s);
+        if (res == nullptr) {
+#ifdef SYC_ERROR_PROMPT
+            if (ctx.find(s) == nullptr)
+                push_err('c', ident->ln);
+            // TODO: what to return now?
+#else
+            string s{*ident};
+            fatal("symbol %s is not a %s", s.data(), typeid(T).name());
+#endif
+        }
+        return res;
+    }
 
     // Omit Decl and BType
 
-    Prog comp_unit() {
+    Prog comp_unit() { RLN
         // CompUnit → {Decl} {FuncDef} MainFuncDef
         Prog res;
         while (true) {
@@ -126,11 +224,8 @@ struct Parser {
             for (auto &p: g->init)
                 evals(&p);
 
-        // Don't do this earlier.
-        // insert_symbols(res.globals);
-
         while (true) {
-            if (peek_is_a(1, tkd::Main)) {
+            if (peek_is_a(1, Main)) {
                 res.funcs.push_back(main_func_def());
                 break;
             } else
@@ -142,7 +237,7 @@ struct Parser {
         return res;
     }
 
-    void const_decl(vector<Decl *> &res) {
+    void const_decl(vector<Decl *> &res) { RLN
         get_a(tkd::Const);
         get_a(tkd::Int);
         res.push_back(const_def());
@@ -152,8 +247,9 @@ struct Parser {
         REPORT("ConstDecl");
     }
 
-    Decl *const_def() {
-        auto *res = new Decl{true, string(*get_a(Ident)), true};
+    Decl *const_def() { RLN
+        auto *ident = get_a(Ident);
+        auto *res = new Decl{true, string(*ident), true};
         while (try_get_a(LBrk)) {
             res->dims.push_back(const_exp());
             get_a(tkd::RBrk);
@@ -162,12 +258,12 @@ struct Parser {
         get_a(tkd::Assign);
         const_init(res->init);
 
-        ctx.insert(res);
+        ctx_insert(res, ident);
         REPORT("ConstDef");
         return res;
     }
 
-    void const_init(vector<Expr *> &res) {
+    void const_init(vector<Expr *> &res) { RLN
         // FIRST(ConstExp) = FIRST(UnaryExp) = FIRST(PrimaryExp) = { LPar, Ident, IntConst }
         if (try_get_a(tkd::LBrc)) {
             // FIRST(ConstInitVal) = FIRST(ConstExp) + { LBrc }
@@ -182,18 +278,18 @@ struct Parser {
         REPORT("ConstInitVal");
     }
 
-    void var_decl(vector<Decl *> &res) {
+    void var_decl(vector<Decl *> &res) { RLN
         get_a(Int);
         do {
             res.push_back(var_def());
         } while (try_get_a(Comma));
-
         get_a(Semi);
         REPORT("VarDecl");
     }
 
-    Decl *var_def() {
-        auto *res = new Decl{false, string(*get_a(Ident))};
+    Decl *var_def() { RLN
+        auto *ident = get_a(Ident);
+        auto *res = new Decl{false, string(*ident)};
         while (try_get_a(LBrk)) {
             int dim = const_exp();
             res->dims.push_back(dim);
@@ -207,12 +303,12 @@ struct Parser {
             init(res->init);
         }
 
-        ctx.insert(res);
+        ctx_insert(res, ident);
         REPORT("VarDef");
         return res;
     }
 
-    void init(vector<Expr *> &res) {
+    void init(vector<Expr *> &res) { RLN
         // FIRST(Exp) = FIRST(AddExp) = FIRST(UnaryExp)
         // Copied from const_init
         if (try_get_a(LBrc)) {
@@ -228,18 +324,26 @@ struct Parser {
         REPORT("InitVal");
     }
 
-    ast::Func *func_def() {
+    ast::Func *func_def() { RLN
         bool returns_int = func_type();
-        string name(*get_a(Ident));
+        HANDLE_ERR(cur_func_returns_int = returns_int;)
+        auto *ident = get_a(Ident);
+        string name{*ident};
         get_a(LPar);
 
         // FIRST(FuncFParams) = { Int }
         auto *res = new ast::Func{name, returns_int};
         if (!try_get_a(RPar)) {
-            func_formal_params(res->params);
-            get_a(RPar);
+HANDLE_ERR(
+            if (tok_is_a(LBrc))
+                push_err('j', (tok - 1)->ln);
+            else {
+)
+                func_formal_params(res->params);
+                get_a(RPar);
+HANDLE_ERR(})
         }
-        ctx.insert(res); // support recursive
+        ctx_insert(res, ident);  // for recursive
 
         debug("Entering func %s", name.data());
         ctx.push();
@@ -249,21 +353,34 @@ struct Parser {
         ctx.pop();
         debug("Exiting func %s", name.data());
 
+        HANDLE_ERR(
+            if (returns_int && (res->body.stmts.empty() || !is_a<ast::Return>(res->body.stmts.back())))
+                push_err('g', peek_last()->ln);
+        )
+
         REPORT("FuncDef");
         return res;
     }
 
-    ast::Func *main_func_def() {
+    ast::Func *main_func_def() { RLN
+        HANDLE_ERR(cur_func_returns_int = true;)
         get_a(Int);
         get_a(Main);
         get_a(LPar);
         get_a(RPar);
         auto body = block();
+
+        HANDLE_ERR(
+            if (body.stmts.empty() || !is_a<ast::Return>(body.stmts.back()))
+                push_err('g', peek_last()->ln);
+        )
+        // TODO: does this apply to MainFuncDef?
+
         REPORT("MainFuncDef");
         return new ast::Func{"main", true, body};
     }
 
-    bool func_type() {
+    bool func_type() { RLN
         bool res = true;
         if (!try_get_a(Int)) {
             res = false;
@@ -273,7 +390,7 @@ struct Parser {
         return res;
     }
 
-    void func_formal_params(vector<Decl *> &res) {
+    void func_formal_params(vector<Decl *> &res) { RLN
         // FOLLOW(FuncFParams) = { RPar }
         do {
             res.push_back(func_formal_param());
@@ -282,7 +399,7 @@ struct Parser {
         REPORT("FuncFParams");
     }
 
-    Decl *func_formal_param() {
+    Decl *func_formal_param() { RLN
         get_a(tkd::Int);
         auto *res = new Decl{false, string(*get_a(Ident))};
 
@@ -300,7 +417,7 @@ struct Parser {
         return res;
     }
 
-    Block block(bool push = true) {
+    Block block(bool push = true) { RLN
         get_a(LBrc);
 
         // FIRST(Decl) = { Const, Int }
@@ -317,24 +434,29 @@ struct Parser {
         return res;
     }
 
-    Stmt *block_item() {
+    Stmt *block_item() { RLN
         const auto *tk = peek();
         if (tk->is_a(Const)) {
             auto *res = new DeclStmt;
             const_decl(res->vars);
+            RLNS
             return res;
         }
         if (tk->is_a(Int)) {
             auto *res = new DeclStmt;
             var_decl(res->vars);
+            RLNS
             return res;
         }
-        return statement();
+        auto *r = statement();
+        RLNS
+        return r;
     }
 
-    Stmt *statement() {
+    Stmt *statement() { RLN
         Stmt *res;
-        switch (peek()->kind) {
+        auto *tk = peek();
+        switch (tk->kind) {
             case tkd::If: {
                 get_unchecked();
                 auto *r = new ast::If;
@@ -356,26 +478,60 @@ struct Parser {
                 auto *r = new ast::While;
                 r->cond = cond();
                 get_a(RPar);
+                HANDLE_ERR(++while_stk;)
                 r->body = statement();
+                HANDLE_ERR(--while_stk;)
                 res = r;
                 goto stmt_no_semi;
             }
 
             case tkd::Break:
+                HANDLE_ERR(
+                    if (!while_stk)
+                        push_err('m', tk->ln);
+                )
                 get_unchecked();
                 res = new ast::Break;
                 break;
 
             case tkd::Continue:
+                HANDLE_ERR(
+                    if (!while_stk)
+                        push_err('m', tk->ln);
+                )
                 get_unchecked();
                 res = new ast::Continue;
                 break;
 
             case tkd::Return: {
                 get_unchecked();
-                auto *r = new ast::Return{};
-                if (!tok_is_a(Semi))
+                auto *r = new ast::Return;
+                r->val = nullptr;
+                if (!tok_is_a(Semi)) {
+#ifdef SYC_ERROR_PROMPT
+                    bool ok = true;
+                    auto ctx_tok = tok;
+                    auto ctx_ln = last_ln;
+                    push_err_mask();
+                    try {
+                        r->val = exp();
+                        if (tok_is_a(tkd::Assign))
+                            throw std::exception{};
+                    } catch (std::exception &e) {
+                        ok = false;
+                        tok = ctx_tok;
+                        last_ln = ctx_ln;
+                        pop_err_mask_reject();
+                    }
+                    if (ok) {
+                        pop_err_mask_resolve();
+                        if (!cur_func_returns_int)
+                            push_err('f', tk->ln);
+                    }
+#else
                     r->val = exp();
+#endif
+                }
                 res = r;
                 break;
             }
@@ -384,11 +540,33 @@ struct Parser {
                 get_unchecked();
                 get_a(LPar);
                 auto *fmt = get_a(FmtStr);
+
                 auto *r = new ast::Printf;
                 r->fmt = fmt->source;
                 r->len = fmt->len;
                 while (try_get_a(Comma))
                     r->args.push_back(exp());
+
+                HANDLE_ERR(
+                    for (uint i = 1; i < fmt->len - 1; ++i) {
+                        int c = fmt->source[i];
+                        if (!(
+                            (
+                                (c == 32 || c == 33 || (c >= 40 && c <= 126)) &&
+                                (c != '\\' || (i + 1 < fmt->len - 1 && fmt->source[i + 1] == 'n'))
+                            ) ||
+                            (c == '%' && i + 1 < fmt->len - 1 && fmt->source[i + 1] == 'd')
+                        )) {
+                            push_err('a', fmt->ln);
+                            break;
+                        }
+                    }
+
+                    uint cnt = std::count(fmt->source + 1, fmt->source + fmt->len - 1, '%');
+                    if (r->args.size() != cnt)
+                        push_err('l', tk->ln);
+                )
+
                 get_a(RPar);
                 printfs.push_back(r);
                 res = r;
@@ -414,11 +592,39 @@ struct Parser {
                     }
                     ++c;
                 }
+#ifndef SYC_ERROR_PROMPT
                 if (c >= tok_end)
                     fatal("stmt not finalized");
+#endif
 
                 if (!is_exp) {
-                    LVal *lhs = lvalue();
+#ifdef SYC_ERROR_PROMPT
+                    bool ok = true;
+                    auto ctx_tok = tok;
+                    auto ctx_ln = last_ln;
+                    push_err_mask();
+                    try {
+                        auto *lhs = lvalue_non_const();
+                        get_a(tkd::Assign);
+                        if (try_get_a(tkd::GetInt)) {
+                            res = new ast::GetInt{lhs};
+                            get_a(LPar);
+                            get_a(RPar);
+                        } else
+                            res = new ast::Assign{lhs, exp()};
+                    } catch (std::exception &e) {
+                        ok = false;
+                        tok = ctx_tok;
+                        last_ln = ctx_ln;
+                        pop_err_mask_reject();
+                        // push_err('i', last_ln);
+                    }
+                    if (ok) {
+                        pop_err_mask_resolve();
+                        break;
+                    }
+#else
+                    auto *lhs = lvalue();
                     get_a(tkd::Assign);
                     if (try_get_a(tkd::GetInt)) {
                         res = new ast::GetInt{lhs};
@@ -427,9 +633,10 @@ struct Parser {
                     } else
                         res = new ast::Assign{lhs, exp()};
                     break;
+#endif
                 }
             }
-                // fall through
+            // fall through
 
             default:
                 res = new ExprStmt{exp()};
@@ -442,21 +649,21 @@ stmt_no_semi:
         return res;
     }
 
-    Expr *exp() {
+    Expr *exp() { RLN
         auto *res = bin_exp<LEVEL_ADD>();
         REPORT("Exp");
         return res;
     }
 
-    Expr *cond() {
+    Expr *cond() { RLN
         auto *res = bin_exp<LEVEL_OR>();
         REPORT("Cond");
         return res;
     }
 
-    LVal *lvalue() {
+    LVal *lvalue() { RLN
         auto *res = new LVal;
-        res->var = ctx.find_a<Decl>(string(*get_a(Ident)));
+        res->var = ctx_find<Decl>(get_a(Ident));
         // FOLLOW(LVal) = binary operators and Assign
         while (try_get_a(LBrk)) {
             res->dims.push_back(exp());
@@ -466,7 +673,23 @@ stmt_no_semi:
         return res;
     }
 
-    Expr *primary_exp() {
+HANDLE_ERR(
+    LVal *lvalue_non_const() { RLN
+        auto *res = new LVal;
+        auto *ident = get_a(Ident);
+        res->var = ctx_find<Decl>(ident);
+        if (res->var && res->var->is_const)
+            push_err('h', ident->ln);
+        while (try_get_a(LBrk)) {
+            res->dims.push_back(exp());
+            get_a(RBrk);
+        }
+        REPORT("LVal");
+        return res;
+    }
+)
+
+    Expr *primary_exp() { RLN
         const auto *tk = peek();
         Expr *res;
         if (tk->is_a(LPar)) {
@@ -481,19 +704,19 @@ stmt_no_semi:
         return res;
     }
 
-    Number *number() {
+    Number *number() { RLN
         int val = std::stoi(string(*get_a(IntConst)));
         REPORT("Number");
         return new Number{val};
     }
 
-    Expr *sub_unary() {
+    Expr *sub_unary() { RLN
         get_unchecked();
         REPORT("UnaryOp");
         return unary_exp();
     }
 
-    Expr *unary_exp() {
+    Expr *unary_exp() { RLN
         const auto *tk = peek();
         auto op = tk->kind;
         Expr *res;
@@ -516,11 +739,40 @@ stmt_no_semi:
                     get_unchecked();
                     get_a(LPar);
                     auto *r = new Call;
-                    r->func = ctx.find_a<ast::Func>(string(*tk));
+                    r->func = ctx_find<ast::Func>(tk);
                     if (!try_get_a(RPar)) {
+#ifdef SYC_ERROR_PROMPT
+                        push_err_mask();
+                        bool ok = true;
+                        auto *ctx_tok = tok;
+                        auto ctx_ln = last_ln;
+                        try {
+                            func_real_params(r->args);
+                            get_a(RPar);
+                        } catch (std::exception &e) { // missing RPar
+                            r->args.clear();
+                            ok = false;
+                            tok = ctx_tok;
+                            last_ln = ctx_ln;
+                            pop_err_mask_reject();
+                            push_err('j', (tok - 1)->ln);
+                        }
+                        if (ok)
+                            pop_err_mask_resolve();
+#else
                         func_real_params(r->args);
                         get_a(RPar);
+#endif
                     }
+                    HANDLE_ERR(
+                        if (r->func) {
+                            if (r->func->params.size() != r->args.size())
+                                push_err('d', tk->ln);
+                            else if (!check_args(r->args, r->func->params))
+                                push_err('e', tk->ln);
+                            // TODO: what if they co-exist?
+                        }
+                    )
                     res = r;
                     break;
                 }
@@ -533,7 +785,7 @@ stmt_no_semi:
         return res;
     }
 
-    void func_real_params(vector<Expr *> &args) {
+    void func_real_params(vector<Expr *> &args) { RLN
         // FOLLOW(FuncRParams) = { RPar }
         do {
             args.push_back(exp());
@@ -543,7 +795,7 @@ stmt_no_semi:
     }
 
     template <int L>
-    Expr *bin_exp() {
+    Expr *bin_exp() { RLN
         Expr *lhs = bin_exp<L - 1>();
         REPORT_S(level_sym[L]);
         TokenKind kind;
@@ -556,7 +808,7 @@ stmt_no_semi:
         return lhs;
     }
 
-    int const_exp() {
+    int const_exp() { RLN
         int v = bin_exp<LEVEL_ADD>()->eval();
         REPORT("ConstExp");
         return v;

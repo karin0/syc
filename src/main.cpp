@@ -9,7 +9,8 @@
 #include <fstream>
 
 constexpr const char *input_file = "testfile.txt";
-constexpr const char *output_file = "output.txt";
+// constexpr const char *output_file = "output.txt";
+constexpr const char *output_file = "error.txt";
 
 string read_file(const char *file) {
     std::ifstream inf(file, std::ios::binary | std::ios::ate);
@@ -79,6 +80,11 @@ int main(int argc, char **argv) {
 
     vector<Token> tokens = lex(&src[0]);
     ast::Prog ast = parse(tokens);
+
+    HANDLE_ERR(
+        put_errs();
+        return 0;
+    )
 
     ir::Prog ir = build_ir(std::move(ast));
     {

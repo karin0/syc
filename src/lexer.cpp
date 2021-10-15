@@ -74,8 +74,33 @@ static bool is_ident_start(int c) {
     return std::isalpha(c) || c == '_';
 }
 
+struct Cursor {
+    const char *ch;
+    int ln = 1;
+
+    explicit Cursor(const char *s): ch(s) {}
+
+    Cursor &operator ++ () {
+        if (*ch == '\n')
+            ++ln;
+        ++ch;
+        return *this;
+    }
+
+    Cursor &operator += (uint d) {
+        while (d--)
+            ++*this;
+        return *this;
+    }
+
+    operator const char * () const {
+        return ch;
+    }
+};
+
 struct Lexer {
-    char *ch;
+    Cursor ch;
+    int ln = 1;
 
     explicit Lexer(char *s) : ch(s) {}
 
@@ -84,7 +109,7 @@ struct Lexer {
 };
 
 TokenKind Lexer::next() {
-    char *start = ch;
+    const char *start = ch;
     int c = *ch;
 
     if (is_ident_start(c)) {
@@ -151,7 +176,7 @@ std::vector<Token> Lexer::lex() {
         if (!c)
             break;
 
-        char *start = ch;
+        const char *start = ch;
         TokenKind tok;
         if (c == '/') {
             if (ch[1] == '*') {
@@ -171,7 +196,7 @@ std::vector<Token> Lexer::lex() {
             tok = next();
 
         // info("Found token %s", kind_name(tok));
-        res.emplace_back(tok, start, ch - start);
+        res.emplace_back(tok, start, ch - start, ch.ln);
     }
     return res;
 }
