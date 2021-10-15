@@ -39,7 +39,11 @@ Value *Use::release() {
     return r;
 }
 
+bool ir::no_value_check;
+
 Value::~Value() {
+    if (!ir::no_value_check)
+        asserts(uses.empty());
     // asserts(uses.empty()); // this prevents final collecting
     // replace_uses(nullptr);
     // FOR_LIST (u, uses)

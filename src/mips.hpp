@@ -118,12 +118,13 @@ namespace Regs {
         21, 22, 23,
     };
 
+    // seems v, a, t is optimal
     constexpr std::array<uint, 24> allocatable{
+        v0, v1,
+        a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
         t8, t9,
-        v0, v1,
-        a0,  5,  6,  7,
         s0, 17, 18, 19, 20,
         21, 22, 23,
     };

@@ -47,17 +47,17 @@ void build_df(Func *f) {
     build_dom(f);
 
     FOR_BB (u, *f) {
-        u->preds.clear();
+        u->pred.clear();
         u->df.clear();
     }
 
     FOR_BB (u, *f)
         for (BB *v : u->get_succ())
-            v->preds.push_back(u);
+            v->pred.push_back(u);
 
     // eac
-    FOR_BB (u, *f) if (u->preds.size() > 1) {
-        for (BB *p : u->preds) {
+    FOR_BB (u, *f) if (u->pred.size() > 1) {
+        for (BB *p : u->pred) {
             for (; p != u->idom; p = p->idom) {
                 p->df.push_back(u);
                 info("%s: bb_%d has bb_%d as df", f->name.data(), p->id, u->id);
@@ -135,8 +135,7 @@ void mem2reg(Func *f) {
                 if_a (AllocaInst, a, x->base.value) {
                     if (a->aid >= 0) {
                         x->lhs->value = nullptr;  // param codegen uses this!
-                        x->replace_uses(vals[a->aid]);
-                        bb->erase(x);
+                        bb->erase_with(x, vals[a->aid]);
                         delete x;
                     }
                 }

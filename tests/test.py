@@ -21,7 +21,7 @@ cmake = 'cmake'
 make = 'make'
 gcc = 'gcc'
 compile_timeout = 5
-mars_timeout = 5
+mars_timeout = 8
 
 path = os.path
 os.chdir(path.dirname(path.realpath(__file__)))
@@ -292,6 +292,7 @@ def main():
             shutil.copy2(results_file, results_file + '.old.csv')
             old_data = read_csv(results_file)
             # TODO: this logic needs fixing, when some row has the last column empty
+            # TODO: render diff and sum
             row_map = {}
             for row in old_data[1:]:
                 src = row[0]

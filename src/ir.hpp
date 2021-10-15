@@ -78,6 +78,8 @@ struct Use : Node<Use> {
     friend std::ostream &operator << (std::ostream &, const Use &);
 };
 
+extern bool no_value_check;
+
 struct Value {
     List<Use> uses;
 
@@ -100,7 +102,7 @@ struct BB : Node<BB> {
     bool vis;
     std::set<BB *> dom;
     BB *idom;
-    vector<BB *> preds, df;
+    vector<BB *> pred, df;
 
     mips::BB *mbb;
 
@@ -177,7 +179,7 @@ struct Const : Value {
     static constexpr const int MAX = mips::Operand::MAX_CONST;
     static constexpr const int MIN = mips::Operand::MIN_CONST;
 
-    int val;
+    const int val;
 
     explicit Const(int val);
 

@@ -111,5 +111,7 @@ int main(int argc, char **argv) {
     *out << mr;
 
     info("bye");
+    ir::no_value_check = true;
+
     return 0;
 }
