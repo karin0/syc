@@ -64,6 +64,11 @@ void BB::erase(Inst *i) {
     insts.erase(i);
 }
 
+void BB::erase_with(Inst *i, Value *v) {
+    i->replace_uses(v);
+    insts.erase(i);
+}
+
 Inst *BB::get_control() const {
     auto *i = insts.back;
     asserts(i->is_control());

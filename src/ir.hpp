@@ -121,9 +121,8 @@ struct BB : Node<BB> {
     }
 
     void erase(Inst *i);
-
+    void erase_with(Inst *i, Value *v);
     Inst *get_control() const;
-
     vector<BB *> get_succ() const;
     // this gives wrong results when multiple control insts are ill-formed,
     // i.e. there are insts after the first control inst in one
