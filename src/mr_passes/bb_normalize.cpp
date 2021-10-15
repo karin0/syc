@@ -4,6 +4,7 @@ using namespace mips;
 
 // normalize every bb to [other..] [br..] [jump/return] by splitting
 // (expanding phi nodes breaks this)
+// TODO: this affects A-2, A-14 (significantly), B-2, B-26
 void bb_normalize(Func *f) {
     for (auto *bb = f->bbs.front; bb; bb = bb->next) {
         bool branched = false;
@@ -48,7 +49,9 @@ void bb_normalize(Func *f) {
                 }
             }
         }
-        if (fall && bb->next)
+        if (fall) {
+            asserts(bb->next);
             bb->succ.push_back(bb->next);
+        }
     }
 }
