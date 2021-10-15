@@ -603,6 +603,7 @@ Prog build_mr(ir::Prog &ir) {
             // do this later since bbs may be split
         }
 
+        // resolving phi makes bbs not so basic, requiring a bb_normalization pass
         FOR_BB (ibb, fun) {
             auto *bb = ibb->mbb;
             infof("ibb", ibb);
@@ -624,20 +625,9 @@ Prog build_mr(ir::Prog &ir) {
                                 break;
                             }
                             if_a (mips::ControlInst, y, j) {
-                                info("%p, got br to mbb_%u, i am %u", j, y->to->id, bb->id);
+                                // debug("%p, got br to mbb_%u, i am %u", j, y->to->id, bb->id);
                                 if (y->to == bb) {
                                     found = true;
-                                    /*
-                                    if (after_control) {  // rarely
-                                        ctx.bb = func->new_bb_after(ubb);
-                                        ctx.push(new MoveInst{t, uv->build_val(&ctx)});
-                                        for (Inst *k = y, *next; k; k = next) {
-                                            next = k->next;
-                                            ubb->insts.erase(k);
-                                            ctx.push(k);
-                                        }
-                                    } else {
-                                     */
                                     ctx.push_point = y;
                                     ctx.push(new MoveInst{t, uv->build_val(&ctx)});
                                     ctx.push_point = nullptr;
@@ -648,41 +638,13 @@ Prog build_mr(ir::Prog &ir) {
                                 }
                             }
                         }
-                        if (!found && !no_fall && bb->prev == ubb) {
-                            // prev != ubb when branch to bb is removed during codegen and no need to copy
-                            // val will not have side effects
-                            // TODO: do a bb split separately, or bb->prev will break
-                            /* if (after_control) {
-                                ctx.bb = func->new_bb_after(ubb);
-                                ctx.push(new MoveInst{t, uv->build_val(&ctx)});
-                            } else */
+                        // prev != ubb when branch to bb is removed during codegen and no need to copy
+                        if (!found && !no_fall && bb->prev == ubb)
                             ubb->push(new MoveInst{t, uv->build_val(&ctx)});
-                        }
                     }
                 } else
                     break;
             }
-        }
-
-        // TODO: normalize every bb to [other..] [br..] [jump/return] by splitting
-
-        // TODO: this method may push duplicated bbs
-        FOR_LIST_MUT (bb, func->bbs) {
-            bool fall = true;
-            FOR_INST (i, *bb) {
-                if (is_a<ReturnInst>(i)) {
-                    fall = false;
-                    break;
-                } else if_a (ControlInst, x, i) {
-                    bb->succ.push_back(x->to);
-                    if (is_a<JumpInst>(x)) {
-                        fall = false;
-                        break;
-                    }
-                }
-            }
-            if (fall && bb->next)
-                bb->succ.push_back(bb->next);
         }
 
         for (auto *x: func->allocas) {
