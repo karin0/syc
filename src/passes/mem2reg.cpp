@@ -66,6 +66,7 @@ void build_df(Func *f) {
     }
 }
 
+// requires dbe
 void mem2reg(Func *f) {
     build_df(f);
 

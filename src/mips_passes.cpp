@@ -6,18 +6,17 @@ void reg_alloc(Func *);
 void reg_restore(Func *);
 void move_coalesce(Func *f);
 
-void run_mips_passes(mips::Prog &prog) {
+static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
+    for (auto &func: lh.funcs)
+        rh(&func);
+    return lh;
+}
 
-#define RUN(p) do \
-    for (auto &f: prog.funcs) \
-        (p)(&f);  \
-    while (0)
-
+void run_mips_passes(Prog &prog) {
     Regs::init();
-    RUN(move_coalesce);  // must preserve arg_loads & allocas
-    RUN(reg_alloc);
-    RUN(move_coalesce);
-    RUN(reg_restore);
+
+    prog << move_coalesce  // must preserve arg_loads & allocas
+         << reg_alloc << move_coalesce << reg_restore;
 
     // TODO: movz, movn; madd; reduce syscall lis; alloc sp (or just use sp in load/store)
 }
