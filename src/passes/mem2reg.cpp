@@ -99,7 +99,7 @@ void mem2reg(Func *f) {
             FOR_BB (bb, *f)
                 bb->vis = false;
             for (auto *bb : def_bbs[i]) if (!bb->vis)
-                wl.push_back(bb); // vis shouldn't be set here, for these bbs hasn't be place phi nodes yet
+                wl.push_back(bb); // vis shouldn't be set here, for these bb-s haven't been placed phi nodes yet
 
             while (!wl.empty()) {
                 auto *u = wl.back();
@@ -169,7 +169,7 @@ void mem2reg(Func *f) {
         }
     } while (!wl.empty());
 
-    for (auto *a : allocas)
+    for (auto *a: allocas)
         delete a;
 
     info("%s: mem2reg done", f->name.data());
