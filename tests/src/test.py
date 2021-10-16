@@ -1,8 +1,10 @@
 import sys
 import time
 import threading
+import collections
 import concurrent.futures as futures
 from datetime import datetime
+
 from env import *
 
 now = datetime.now()
@@ -90,33 +92,56 @@ def key0(a):
     return s, 0
 
 
+rid_cnt = collections.Counter()
+
+
+def get_rid(case):
+    k = case_iden(case[0])
+    try:
+        from pathvalidate import sanitize_filename
+        k = sanitize_filename(k)
+    except ImportError:
+        pass
+
+    if c := rid_cnt[k]:
+        rid_cnt[k] = c + 1
+        return f'{k}_{c}'
+    rid_cnt[k] = 1
+    return k
+
+
 def main():
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         fail = 'f' in arg
         no_stat = fail or 'n' in arg
-        if not (fail or no_stat):
-            raise ValueError('invalid args')
+        spec = 't' in arg
+        if 'm' in arg and len(sys.argv) > 2:
+            desc = sys.argv[2]
+        else:
+            desc = None
     else:
         fail = no_stat = False
+        desc = None
 
     print(cpu_count, 'cores found')
-
-    os.chdir(path.join(file_dir, '..'))
     build()
 
     if fail:
         cases = get_fail_cases()
+    elif spec:
+        cases = get_the_cases()
     else:
-        cases = get_cases()
+        cases = get_root_cases()
 
     mkdir('out')
 
     with futures.ThreadPoolExecutor(max_workers=cpu_count) as executor:
         dt = time.time()
         for fut in futures.as_completed([
-            executor.submit(run, i, *case)
-            for i, case in enumerate(cases)
+            executor.submit(run, get_rid(case), *case)
+            for case in cases
+            # for i, case in enumerate(cases)
         ]):
             fut.result()
         dt = time.time() - dt
@@ -142,25 +167,48 @@ def main():
         tim = now.strftime('%m-%d %H:%M:%S')
         sts = [(src, stat[-2]) for src, stat in sts]
 
+        st_sum = sum(float(st[1]) for st in sts)
+        n = len(sts)
+        sts.append(('~sum', '%.1f' % st_sum))
+        sts.append(('~avg', '%.3f' % (st_sum / n)))
+        if desc:
+            sts.append(('~~desc', desc))
+
         if path.isfile(results_file):
             shutil.copy2(results_file, results_file + '.old.csv')
             old_data = read_csv(results_file)
             # TODO: this logic needs fixing, when some row has the last column empty
             # TODO: render diff and sum
             row_map = {}
+            head = old_data[0]
+            ow = len(old_data[0])
+            if head[-1] == 'delta':
+                head.pop()
+                ow -= 1
             for row in old_data[1:]:
+                if len(row) < ow:
+                    row += [''] * (ow - len(row))
+                elif len(row) > ow:
+                    assert len(row) == ow + 1
+                    row.pop()
                 src = row[0]
                 row_map[src] = row
-            w = len(old_data[0]) - 1
+            has_diff = False
             for src, fc in sts:
                 row = row_map.get(src)
                 if row is None:
-                    row_map[src] = [src] + [''] * w + [fc]
-                else:
+                    row_map[src] = [src] + [''] * (ow - 1) + [fc]
+                elif src != '~~desc':
+                    has_diff = True
+                    ofc = row[-1]
                     row.append(fc)
+                    row.append(str(float(fc) - float(ofc)))
             rows = list(row_map.values())
             rows.sort(key=key0)
-            data = [old_data[0] + [tim]] + rows
+            head.append(tim)
+            if has_diff:
+                head.append('delta')
+            data = [head] + rows
         else:
             data = [['Case', tim]] + [[src, fc] for src, fc in sts]
 

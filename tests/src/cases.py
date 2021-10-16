@@ -1,6 +1,18 @@
 import os
-from conf import cases_root
 path = os.path
+
+cases_root = '/home/karin0/lark/buaa/ct/cases'
+a_dir = '/home/karin0/lark/buaa/ct/cases/926/testfiles/A'
+
+
+def make_course_case(dir, i):
+    return (path.join(dir, f'testfile{i}.txt'),
+            path.join(dir, f'input{i}.txt'),
+            None)
+
+
+def get_the_cases():
+    return [make_course_case(a_dir, '13')]
 
 
 def case_iden(s):
