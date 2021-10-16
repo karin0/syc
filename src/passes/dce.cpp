@@ -2,7 +2,7 @@
 
 using namespace ir;
 
-void dce0(Func *f) {
+static void dce0(Func *f) {
     // TODO: opt; const prog
     bool changed;
     do {
@@ -24,7 +24,7 @@ void dce0(Func *f) {
     info("%s: dce done", f->name.data());
 }
 
-vector<const Use *> get_owned_uses(Inst *i) {
+static vector<const Use *> get_owned_uses(Inst *i) {
     if_a (BinaryInst, x, i)
         return {&x->lhs, &x->rhs};
     else if_a (CallInst, x, i) {
