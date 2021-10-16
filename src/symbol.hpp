@@ -17,10 +17,4 @@ struct SymbolTable {
     void push();
 
     void pop();
-
-    template <class T>
-    T *find_a(const string &n) const {
-        return dynamic_cast<T *>(find(n));
-        // fatal("symbol %s is not a %s", n.data(), typeid(T).name());
-    }
 };

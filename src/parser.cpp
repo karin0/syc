@@ -192,7 +192,7 @@ HANDLE_ERR(
     template <class T>
     T *ctx_find(const Token *ident) const {
         string s{*ident};
-        T *res = ctx.find_a<T>(s);
+        auto res = as_a<T>(ctx.find(s));
         if (res == nullptr) {
 #ifdef SYC_ERROR_PROMPT
             if (ctx.find(s) == nullptr)

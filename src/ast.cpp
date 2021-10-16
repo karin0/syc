@@ -1,5 +1,6 @@
 #include "ast.hpp"
 #include "common.hpp"
+#include "util.hpp"
 
 using namespace ast;
 
@@ -41,7 +42,7 @@ int Expr::eval() {
 }
 
 int ast::evals(Expr **e) {
-    if (auto *x = dynamic_cast<Number *>(*e))
+    if_a (Number, x, *e)
         return x->val;
     else {
         int v = (*e)->eval();
