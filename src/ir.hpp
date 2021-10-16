@@ -228,6 +228,8 @@ struct Inst : Value, Node<Inst> {
 
     uint id;
 
+    bool vis;
+
     Inst() = default;
 
     bool is_pure() const;

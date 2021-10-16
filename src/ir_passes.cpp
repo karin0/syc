@@ -2,7 +2,6 @@
 
 using namespace ir;
 
-void dbe(Func *);
 void dce(Func *);
 void mem2reg(Func *);
 void br_induce(Func *);
@@ -14,7 +13,7 @@ static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
 }
 
 void run_passes(Prog &prog) {
-    prog << dbe << dce << dbe << mem2reg
-         << dce << dbe << dce // TODO: this is required or things break (undef?)
+    prog << dce << mem2reg
+         << dce // TODO: this is required or things break (undef?)
          << br_induce;
 }

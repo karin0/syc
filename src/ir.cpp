@@ -201,7 +201,7 @@ bool Inst::is_pure() const {
     //if_a (const CallInst, x, this)
     //    return !x->func->has_side_effects;
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
-            || is_a<PhiInst>(this); || is_a<AllocaInst>(this);
+            || is_a<PhiInst>(this) || is_a<AllocaInst>(this);
 }
 
 bool Inst::is_control() const {
