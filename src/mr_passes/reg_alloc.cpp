@@ -1,65 +1,9 @@
-#include "use_def.hpp"
+#include "liveness.hpp"
 #include <algorithm>
 #include <bitset>
 
-using namespace mips;
 using std::set;
 using std::unordered_map;
-
-// TODO: drop ignored, colored, Machine/Pinned
-static bool is_ignored(const Operand &x) {
-    return !(x.is_virtual() || (x.is_pinned() && Regs::inv_allocatable[x.val] < 32));
-}
-
-static void remove_colored(vector<Reg> &v) {
-    v.erase(std::remove_if(v.begin(), v.end(), is_ignored), v.end());
-    for (auto &x: v)
-        asserts(x.is_uncolored());
-}
-
-static std::pair<vector<Reg>, vector<Reg>> get_def_use_uncolored(Inst *i, Func *f) {
-    auto r = get_def_use(i, f);
-    remove_colored(r.first);
-    remove_colored(r.second);
-    return r;
-}
-
-// TODO: this may be unreliable, as bbs now are not "real" bbs, but can contain j/brs due to phi resolving
-// that's possibly why dce on machine regs cannot be performed
-// maybe we should add phi copies at the beginning of the source bb (tested to affect perf) or in a new inserted bb
-static void liveness_analysis(Func *f) {
-    FOR_BB (bb, *f) {
-        bb->use.clear();
-        bb->def.clear();
-        bb->live_out.clear();
-
-        FOR_INST (i, *bb) {
-            auto use_def = get_def_use_uncolored(i, f);
-            for (auto &x: use_def.second) if (!bb->def.count(x))
-                bb->use.insert(x);
-            for (auto &x: use_def.first) if (!bb->use.count(x))
-                bb->def.insert(x);
-        }
-
-        bb->live_in = bb->use;
-    }
-    bool changed;
-    do {
-        changed = false;
-        FOR_BB (bb, *f) {
-            set<Reg> out;
-            for (auto *t: bb->succ)
-                out.insert(t->live_in.begin(), t->live_in.end());
-            if (out != bb->live_out) {
-                changed = true;
-                bb->live_out = std::move(out);
-                bb->live_in = bb->use;
-                for (auto &x: bb->live_out) if (!bb->def.count(x))
-                    bb->live_in.insert(x);
-            }
-        }
-    } while (changed);
-}
 
 template <>
 struct std::hash<Operand> {
@@ -488,7 +432,7 @@ struct Allocater {
     void run() {
         while (true) {
             infof(func->ir->name + ": reg alloc loop");
-            liveness_analysis(func);
+            build_liveness(func);
 
             for (uint i = 0; i < K; ++i) if (Regs::inv_allocatable[i] < 32)
                 get_node(Reg::make_pinned(i))->degree = 0x7fffffff;
@@ -516,28 +460,6 @@ struct Allocater {
     }
 };
 
-}
-
-void dce(Func *func) {
-    for (auto *bb = func->bbs.back; bb; bb = bb->prev) {
-        auto live = bb->live_out;
-        for (Inst *i = bb->insts.back, *prev; i; i = prev) {
-            prev = i->prev;
-            auto def_use = get_def_use(i, func);
-            auto &def = def_use.first;
-            auto &use = def_use.second;
-            if (def.size() == 1 && def.front().is_virtual() && !live.count(def.front()) && i->is_pure()) {
-                infof("dce erasing", *i);
-                bb->insts.erase(i);
-                delete i;
-                continue;
-            }
-            for (auto &d: def)
-                live.erase(d);
-            for (auto &u: use)
-                live.insert(u);
-        }
-    }
 }
 
 // TODO: alloc sp (or just use in mem insts)
