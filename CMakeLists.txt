@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 add_definitions(
         # -DSYC_LOG
         -DSYC_STDIN
-        # -DSYC_STDOUT
+        -DSYC_STDOUT
         -DSYC_ASSERTS
 )
 file(GLOB_RECURSE src_files "src/*")

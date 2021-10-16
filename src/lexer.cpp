@@ -100,7 +100,6 @@ struct Cursor {
 
 struct Lexer {
     Cursor ch;
-    int ln = 1;
 
     explicit Lexer(char *s) : ch(s) {}
 

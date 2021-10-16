@@ -333,22 +333,37 @@ HANDLE_ERR(
 
         // FIRST(FuncFParams) = { Int }
         auto *res = new ast::Func{name, returns_int};
+
+#ifdef SYC_ERROR_PROMPT
+        vector<std::pair<Decl *, const Token *>> params;
+#endif
+
         if (!try_get_a(RPar)) {
-HANDLE_ERR(
+#ifdef SYC_ERROR_PROMPT
             if (tok_is_a(LBrc))
                 push_err('j', (tok - 1)->ln);
             else {
-)
-                func_formal_params(res->params);
+                func_formal_params(params);
                 get_a(RPar);
-HANDLE_ERR(})
+            }
+#else
+            func_formal_params(res->params);
+            get_a(RPar);
+#endif
         }
         ctx_insert(res, ident);  // for recursive
 
         debug("Entering func %s", name.data());
         ctx.push();
+#ifdef SYC_ERROR_PROMPT
+        for (auto &p: params) {
+            ctx_insert(p.first, p.second);
+            res->params.push_back(p.first);
+        }
+#else
         for (Decl *x: res->params)
             ctx.insert(x);
+#endif
         res->body = block(false);
         ctx.pop();
         debug("Exiting func %s", name.data());
@@ -390,18 +405,27 @@ HANDLE_ERR(})
         return res;
     }
 
+#ifdef SYC_ERROR_PROMPT
+    void func_formal_params(vector<std::pair<Decl *, const Token *>> &res) { RLN
+#else
     void func_formal_params(vector<Decl *> &res) { RLN
+#endif
         // FOLLOW(FuncFParams) = { RPar }
-        do {
+        do
             res.push_back(func_formal_param());
-        } while (try_get_a(Comma));
+        while (try_get_a(Comma));
 
         REPORT("FuncFParams");
     }
 
+#ifdef SYC_ERROR_PROMPT
+    std::pair<Decl *, const Token *> func_formal_param() { RLN
+#else
     Decl *func_formal_param() { RLN
+#endif
         get_a(tkd::Int);
-        auto *res = new Decl{false, string(*get_a(Ident))};
+        auto *ident = get_a(Ident);
+        auto *res = new Decl{false, string(*ident)};
 
         // FOLLOW(FuncFParam) = { Comma, RPar }
         if (try_get_a(LBrk)) {
@@ -414,7 +438,11 @@ HANDLE_ERR(})
         }
 
         REPORT("FuncFParam");
+#ifdef SYC_ERROR_PROMPT
+        return {res, ident};
+#else
         return res;
+#endif
     }
 
     Block block(bool push = true) { RLN
@@ -562,7 +590,11 @@ HANDLE_ERR(})
                         }
                     }
 
-                    uint cnt = std::count(fmt->source + 1, fmt->source + fmt->len - 1, '%');
+                    uint cnt = 0;
+                    for (uint i = 1; i < fmt->len - 1; ++i)
+                        if (fmt->source[i] == '%' && i + 1 < fmt->len - 1 && fmt->source[i + 1] == 'd')
+                            ++cnt;
+
                     if (r->args.size() != cnt)
                         push_err('l', tk->ln);
                 )
