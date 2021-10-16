@@ -61,6 +61,7 @@ tmp
 
 __pycache__
 *.pyc
+venv
 
 /tests/out
 /tests/build

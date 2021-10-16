@@ -37,6 +37,8 @@ struct Decl : Symbol {
 
     ir::Value *value;
 
+    bool is_global = false;
+
     Decl(bool is_const, const string &name, bool has_init = false);
 
     uint size() const;  // without 4

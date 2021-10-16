@@ -220,9 +220,11 @@ HANDLE_ERR(
                 var_decl(res.globals);
         }
 
-        for (auto *g: res.globals)
+        for (auto *g: res.globals) {
+            g->is_global = true;
             for (auto &p: g->init)
                 evals(&p);
+        }
 
         while (true) {
             if (peek_is_a(1, Main)) {

@@ -109,10 +109,14 @@ void Func::push_bb(BB *bb) {
     bbs.push(bb);
 }
 
-GetIntFunc::GetIntFunc() : Func(true, {}, "sys_getint") {}
+GetIntFunc::GetIntFunc() : Func(true, {}, "sys_getint") {
+    has_side_effects = true;
+}
 
 PrintfFunc::PrintfFunc(const char *fmt, std::size_t len) :
-    Func(false, {}, "sys_printf"), fmt(fmt), len(len) {}
+    Func(false, {}, "sys_printf"), fmt(fmt), len(len) {
+    has_side_effects = true;
+}
 
 Const::Const(int val) : val(val) {}
 
@@ -194,8 +198,10 @@ void PhiInst::push(Value *val, BB *bb) {
 
 bool Inst::is_pure() const {
     // TODO: CallInst to pure funcs
+    //if_a (const CallInst, x, this)
+    //    return !x->func->has_side_effects;
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
-            || is_a<PhiInst>(this);
+            || is_a<PhiInst>(this); || is_a<AllocaInst>(this);
 }
 
 bool Inst::is_control() const {

@@ -1,3 +1,4 @@
+#include "passes/ir_common.hpp"
 #include "ir_builder.hpp"
 #include "common.hpp"
 
@@ -369,5 +370,7 @@ Prog build_ir(ast::Prog &&ast) {
         if (!last || !last->is_control())
             bb_last->push(new ReturnInst{nullptr});
     }
+
+    build_cg(&res);
     return res;
 }

@@ -138,8 +138,10 @@ struct Func {
     vector<Decl *> params;
     List<BB> bbs;
     string name;
-
     int bb_cnt = 0;
+
+    std::set<Func *> callers;
+    bool has_side_effects;
 
     Func(bool returns_int, vector<Decl *> &&params, string &&name);
 
