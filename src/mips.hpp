@@ -118,7 +118,7 @@ namespace Regs {
         21, 22, 23,
     };
 
-    // seems v, a, t is optimal
+    // v, a, t seems optimal
     constexpr std::array<uint, 24> allocatable{
         v0, v1,
         a0,  5,  6,  7,
