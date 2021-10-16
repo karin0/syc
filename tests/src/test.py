@@ -116,12 +116,12 @@ def main():
         fail = 'f' in arg
         no_stat = fail or 'n' in arg
         spec = 't' in arg
-        if 'm' in arg and len(sys.argv) > 2:
+        if len(sys.argv) > 2:
             desc = sys.argv[2]
         else:
             desc = None
     else:
-        fail = no_stat = False
+        fail = no_stat = spec = False
         desc = None
 
     print(cpu_count, 'cores found')
@@ -198,11 +198,13 @@ def main():
                 row = row_map.get(src)
                 if row is None:
                     row_map[src] = [src] + [''] * (ow - 1) + [fc]
-                elif src != '~~desc':
-                    has_diff = True
-                    ofc = row[-1]
+                else:
                     row.append(fc)
-                    row.append(str(float(fc) - float(ofc)))
+                    if src != '~~desc':
+                        ofc = row[-2]
+                        if ofc:
+                            has_diff = True
+                            row.append(str(float(fc) - float(ofc)))
             rows = list(row_map.values())
             rows.sort(key=key0)
             head.append(tim)
