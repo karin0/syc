@@ -50,15 +50,19 @@ cmake-build-*
 *.asm
 *.zip
 *.in
+*.csv
+tmp
 
 .idea
 .vscode
 
 !/CMakeLists.txt
 
+__pycache__
+*.pyc
+
 /tests/out
 /tests/build
-/tests/stats
-/tests/old_stats
+/tests/*stats
+/tests/fail*
 /tests/**/*.c
-*.csv
