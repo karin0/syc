@@ -198,8 +198,8 @@ void PhiInst::push(Value *val, BB *bb) {
 
 bool Inst::is_pure() const {
     // TODO: CallInst to pure funcs
-    //if_a (const CallInst, x, this)
-    //    return !x->func->has_side_effects;
+    if_a (const CallInst, x, this)
+        return !x->func->has_side_effects;
     return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
             || is_a<PhiInst>(this) || is_a<AllocaInst>(this);
 }
