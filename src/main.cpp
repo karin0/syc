@@ -46,7 +46,7 @@ std::pair<string, const char *> parse_args(int argc, char **argv) {
             return {read_file(argv[1]), argv[3]};
         return {read_file(argv[1]), nullptr};
     } else
-        return {read_file(input_file), nullptr};
+        return {read_stdin(), nullptr};
 }
 
 int main(int argc, char **argv) {
