@@ -1,47 +1,4 @@
-#include "../ir.hpp"
-
-using namespace ir;
-
-static void traverse(BB *u, BB *block) {
-    if (u->vis || u == block)
-        return;
-    u->vis = true;
-    for (auto v : u->get_succ())
-        traverse(v, block);
-}
-
-void build_dom(Func *f) {
-    FOR_BB (u, *f) {
-        u->dom.clear();
-        u->idom = nullptr;
-    }
-
-    FOR_BB (w, *f) {
-        FOR_BB (u, *f)
-            u->vis = false;
-
-        traverse(f->bbs.front, w);
-        FOR_BB (u, *f) if (!u->vis) {
-            u->dom.insert(w);
-            info("%s: bb_%d doms bb_%d", f->name.data(), w->id, u->id);
-        }
-    }
-
-    FOR_BB (u, *f) {
-        for (BB *w : u->dom) if (u != w) {
-            bool ok = true;
-            for (BB *v : u->dom) if (v != u && w != v && v->dom.count(w)) {
-                ok = false;
-                break;
-            }
-            if (ok) {
-                u->idom = w;
-                info("%s: bb_%d idoms bb_%d", f->name.data(), w->id, u->id);
-                break;
-            }
-        }
-    }
-}
+#include "ir_common.hpp"
 
 void build_df(Func *f) {
     build_dom(f);

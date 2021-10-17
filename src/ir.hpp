@@ -100,13 +100,15 @@ struct BB : Node<BB> {
     List<Inst> insts;
 
     bool vis;
-    std::set<BB *> dom;
+    std::set<BB *> dom, domees;
     BB *idom;
     vector<BB *> pred, df;
 
     mips::BB *mbb;
 
     int id;
+
+    int dom_depth;
 
     template <class T>
     T *push(T *i) {
