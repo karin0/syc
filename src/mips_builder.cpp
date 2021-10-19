@@ -580,8 +580,10 @@ Prog build_mr(ir::Prog &ir) {
         res.funcs.emplace_back(&fun);
         auto *func = &res.funcs.back();
 
-        FOR_BB (ibb, fun)
-            ibb->mbb = func->new_bb();
+        FOR_BB (ibb, fun) {
+            auto *bb = ibb->mbb = func->new_bb();
+            bb->loop_depth = ibb->loop ? ibb->loop->depth : 0;
+        }
 
         auto *bb_start = func->bbs.front;
         uint n = std::min(uint(fun.params.size()), MAX_ARG_REGS);

@@ -1,10 +1,9 @@
-#include "passes.hpp"
+#include "passes/ir_common.hpp"
 
-using namespace ir;
-
-void dce(Func *);
+void dcbe(Func *);
 void mem2reg(Func *);
 void br_induce(Func *);
+void gvn_gcm(Func *f);
 
 static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
     for (auto &func: lh.funcs)
@@ -13,7 +12,10 @@ static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
 }
 
 void run_passes(Prog &prog) {
-    prog << dce << mem2reg
-         << dce // TODO: this is required or things break (undef?)
-         << br_induce;
+    prog << dcbe << mem2reg
+         << dcbe // TODO: this is required or things break (undef?)
+         << gvn_gcm
+         << dcbe
+         << br_induce
+         << build_loop;
 }

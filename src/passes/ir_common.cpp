@@ -18,14 +18,14 @@ static void traverse(BB *u, BB *block) {
 
 static void set_depth(BB *u, int depth) {
     u->dom_depth = depth;
-    for (auto *p: u->domees)
+    for (auto *p: u->dom_chs)
         set_depth(p, depth + 1);
 }
 
 void build_dom(Func *f) {
     FOR_BB (u, *f) {
         u->dom.clear();
-        u->domees.clear();
+        u->dom_chs.clear();
         u->idom = nullptr;
     }
 
@@ -36,7 +36,6 @@ void build_dom(Func *f) {
         traverse(f->bbs.front, w);
         FOR_BB (u, *f) if (!u->vis) {
                 u->dom.insert(w);
-                w->domees.insert(u);
                 info("%s: bb_%d doms bb_%d", f->name.data(), w->id, u->id);
             }
     }
@@ -44,12 +43,14 @@ void build_dom(Func *f) {
     FOR_BB (u, *f) {
         for (BB *w : u->dom) if (u != w) {
                 bool ok = true;
-                for (BB *v : u->dom) if (v != u && w != v && v->dom.count(w)) {
+                for (BB *v : u->dom)
+                    if (v != u && w != v && v->dom.count(w)) {
                         ok = false;
                         break;
                     }
                 if (ok) {
                     u->idom = w;
+                    w->dom_chs.insert(u);
                     info("%s: bb_%d idoms bb_%d", f->name.data(), w->id, u->id);
                     break;
                 }
@@ -57,4 +58,32 @@ void build_dom(Func *f) {
     }
 
     set_depth(f->bbs.front, 0);
+}
+
+vector<const Use *> get_owned_uses(Inst *i) {
+    if_a (BinaryInst, x, i)
+        return {&x->lhs, &x->rhs};
+    else if_a (CallInst, x, i) {
+        vector<const Use *> res;
+        for (auto &u: x->args)
+            res.push_back(&u);
+        return res;
+    } else if_a (BranchInst, x, i)
+        return {&x->cond};
+    else if_a (ReturnInst, x, i) {
+        if (x->val.value)
+            return {&x->val};
+    } else if_a (LoadInst, x, i)
+        return {&x->base, &x->off};
+    else if_a (StoreInst, x, i)
+        return {&x->val, &x->base, &x->off};
+    else if_a (GEPInst, x, i)
+        return {&x->base, &x->off};
+    else if_a (PhiInst, x, i) {
+        vector<const Use *> res;
+        for (auto &u: x->vals)
+            res.push_back(&u.first);
+        return res;
+    }
+    return {};
 }

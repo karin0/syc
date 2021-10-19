@@ -26,6 +26,8 @@ struct BB : Node<BB> {
 
     uint id;
 
+    int loop_depth;
+
     template <class T>
     T *push(T *i) {
         // i->bb = this;

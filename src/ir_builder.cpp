@@ -80,7 +80,6 @@ std::pair<Value *, Value *> resolve_idx(
 }
 
 // idx.size() < dims.size() only when LVal
-// TODO: const promote
 Value *ast::LVal::build(Builder *ctx) {
     auto &idx = dims;
     auto &dims = var->dims;

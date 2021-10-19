@@ -20,6 +20,10 @@ std::ostream &operator << (std::ostream &os, Inst &i) {
     return os;
 }
 
+std::ostream &operator << (std::ostream &os, const BB &bb) {
+    os << "bb_" << bb.id;
+    return os;
+}
 
 static std::ostream &operator << (std::ostream &os, const Decl &var) {
     os << var.name << '[';

@@ -1,6 +1,7 @@
 #include "liveness.hpp"
 #include <algorithm>
 #include <bitset>
+#include <cmath>
 
 using std::set;
 using std::unordered_map;
@@ -18,15 +19,20 @@ constexpr uint K = Regs::allocatable.size();
 
 struct Node {
     Operand reg;
-    uint degree = 0, color = 0x7f;
+    uint degree = 0, color = 0x7f, depth = 0;
     Node *alias = nullptr;
     std::set<Node *> adj_list;
     std::set<MoveInst *> move_list;
     bool colored = false;  // colored_nodes
+    bool is_spiller = false;
+
+    double weight() const {
+        return degree / std::pow(2.0, depth);
+    }
 };
 
 template <class T>
-void insert_all(set<T> dst, set<T> src) {
+void insert_all(set<T> &dst, const set<T> &src) {
     for (auto &x: src)
         dst.insert(x);
 }
@@ -37,6 +43,7 @@ struct Allocater {
     vector<Node *> select_stack;
     set<MoveInst *> wl_moves;
     set<Node *> spilled_nodes, coalesced_nodes, spill_wl, freeze_wl, simplify_wl;
+    vector<Operand> rewritten_spillers;
 
     void clear() {
         nodes.clear();
@@ -49,13 +56,7 @@ struct Allocater {
         simplify_wl.clear();
     }
 
-    explicit Allocater(Func *f) {
-        func = f;
-    }
-
     Node *get_node(Operand r) {
-        // if (nodes.find(r) == nodes.end())
-        //     debugf("inserting", r);
         auto &u = nodes[r];
         u.reg = r;
         return &u;
@@ -89,18 +90,22 @@ struct Allocater {
                 auto def_use = get_def_use_uncolored(i, func);
                 auto &def = def_use.first;
                 auto &use = def_use.second;
+                /*
                 if (def.size() == 1 && def.front().is_virtual() && !live.count(def.front()) && i->is_pure()) {
                     infof("erasing", *i);
                     bb->insts.erase(i);
                     delete i;
                     continue;
-                }
+                }*/
                 if_a (MoveInst, x, i) if (!(is_ignored(x->src) || is_ignored(x->dst))) {
-                    x->active = false;  // initialize active_moves
-                    live.erase(x->src);
-                    get_node(x->src)->move_list.insert(x);
-                    get_node(x->dst)->move_list.insert(x);
-                    wl_moves.insert(x);
+                    auto *u = get_node(x->src), *v = get_node(x->dst);
+                    if (!(u->is_spiller || v->is_spiller)) {
+                        x->active = false;  // initialize active_moves
+                        live.erase(x->src);
+                        u->move_list.insert(x);
+                        v->move_list.insert(x);
+                        wl_moves.insert(x);
+                    }
                 }
                 for (auto &d: def)
                     live.insert(d);  // the point is to insert them all to the graph
@@ -110,10 +115,14 @@ struct Allocater {
                             infof(func->ir->name, ": building edge &", d, '&', l);
                         add_edge(get_node(l), get_node(d));
                     }
-                for (auto &d: def)
+                for (auto &d: def) {
                     live.erase(d);
-                for (auto &u: use)
+                    get_node(d)->depth += bb->loop_depth;
+                }
+                for (auto &u: use) {
                     live.insert(u);
+                    get_node(u)->depth += bb->loop_depth;
+                }
             }
         }
     }
@@ -138,8 +147,7 @@ struct Allocater {
     }
 
     bool move_related(Node *u) const {
-        auto &l = u->move_list;
-        return std::any_of(l.begin(), l.end(), [&](MoveInst *x) {
+        return std::any_of(u->move_list.begin(), u->move_list.end(), [&](MoveInst *x) {
             return x->active || wl_moves.count(x);
         });
     }
@@ -195,16 +203,19 @@ struct Allocater {
         auto *m = *it;
         auto *u = get_alias(&nodes[m->dst]);
         auto *v = get_alias(&nodes[m->src]);
+        asserts(move_related(&nodes[m->dst]) && move_related(&nodes[m->src]));
         if (m->src.is_pinned())
             std::swap(u, v);
         wl_moves.erase(it);
         if (u == v) {
             // coalesced_moves is unused
+            infof("coalesced_moves, add only", u->reg);
             add_wl(u);
             return;
         }
         if (v->reg.is_pinned() || u->adj_list.count(v) || v->adj_list.count(u)) {
             // constrained_moves is unused
+            infof("constrained_moves, add both", u->reg, "and", v->reg);
             add_wl(u);
             add_wl(v);
             return;
@@ -215,6 +226,7 @@ struct Allocater {
              [&](Node *t) {
                 return ok(t, u);
              })) || (!u_precolored && (insert_all(ad, adjacent(u)), conservative(ad)))) {
+            infof("combining move, add left", u->reg);
             combine(u, v);
             add_wl(u);
         } else
@@ -242,7 +254,9 @@ struct Allocater {
     }
 
     Node *get_alias(Node *u) {
-        return coalesced_nodes.count(u) ? get_alias(u->alias) : u;
+        while (coalesced_nodes.count(u))
+            u = u->alias;
+        return u;
     }
 
     void combine(Node *u, Node *v) {
@@ -253,9 +267,8 @@ struct Allocater {
         v->alias = u;
         // typo?
         insert_all(u->move_list, v->move_list);
-        auto s = adjacent(v);
-        for (Node *t: s) {
-            infof("so connect", t->reg, "to", u->reg);
+        for (Node *t: adjacent(v)) {
+            // infof("so connect", t->reg, "to", u->reg);
             add_edge(t, u);
             dec_degree(t);
         }
@@ -279,13 +292,14 @@ struct Allocater {
             else
                 wl_moves.erase(m);
             // frozen_moves is unused
-            auto vx = m->src;
-            if (vx == u->reg)
-                vx = m->dst;
+            auto v = get_alias(&nodes[m->src]);
+            if (v == u)
+            // if (vx == u->reg)
+                v = get_alias(&nodes[m->dst]);
             else
-                asserts(m->dst == u->reg);
-            asserts(nodes.find(vx) != nodes.end());
-            auto *v = &nodes[vx];
+                asserts(get_alias(&nodes[m->dst]) == u);
+            // asserts(nodes.find(vx) != nodes.end());
+            // auto *v = &nodes[vx];
             if (!move_related(v) && v->degree < K) {
                 infof("move", v->reg, "from freeze_wl to simplify_wl, with u", u->reg);
                 freeze_wl.erase(v);
@@ -295,9 +309,12 @@ struct Allocater {
     }
 
     void select_spill() {
-        auto it = spill_wl.begin();
+        auto it = std::max_element(spill_wl.begin(), spill_wl.end(), [](const Node *a, const Node *b) {
+            return a->weight() < b->weight();
+        });
+        // auto it = spill_wl.begin();
         auto *u = *it;
-        infof("selecting spill", u->reg);
+        infof("selecting spill", u->reg, "weighted", u->weight());
         asserts(u->reg.is_virtual());
         spill_wl.erase(it);
         simplify_wl.insert(u);
@@ -354,7 +371,8 @@ struct Allocater {
                 asserts(spilled_nodes.count(a));
                 continue; // todo: qwqwq
             }
-            infof(func->ir->name, "coloring coalesced", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]), u->color);
+            infof(func->ir->name, "coalesce coloring", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]),
+                  u->color, "just as", a->reg, "whose color is also", a->color);
             u->colored = true;
         }
 
@@ -365,19 +383,23 @@ struct Allocater {
                     auto &u = it->second;
                     if (x->is_pinned())
                         x->kind = Reg::Pinned;
-                    else if (u.colored)
+                    else if (u.colored) {
+                        infof("replacing", u.reg, *x);
                         *x = Reg::make_pinned(Regs::allocatable[u.color]); // TODO: QAQ why machined?
+                        infof("to", *x);
+                    }
                 }
             }
         }
     }
 
     void rewrite_program() {
+        rewritten_spillers.clear();
         for (auto &u: spilled_nodes)
             spill(u->reg);
     }
 
-    void spill(Reg r) const {
+    void spill(Reg r) {
         infof("doing spilling for", r);
         int off = int((func->max_call_arg_num + func->alloca_num + func->spill_num) << 2);
         FOR_BB (bb, *func) {
@@ -407,14 +429,18 @@ struct Allocater {
                 auto def_use = get_owned_def_use(i);
                 auto *def = def_use.first;
                 if (def && *def == r) {
-                    if (spiller.is_void())
+                    if (spiller.is_void()) {
                         spiller = func->make_vreg();
+                        rewritten_spillers.push_back(spiller);
+                    }
                     *def = spiller;
                     last_def = i;
                 }
                 for (auto *use: def_use.second) if (*use == r) {
-                    if (spiller.is_void())
+                    if (spiller.is_void()) {
                         spiller = func->make_vreg();
+                        rewritten_spillers.push_back(spiller);
+                    }
                     *use = spiller;
                     if (!first_use && !last_def)
                         first_use = i;
@@ -429,16 +455,23 @@ struct Allocater {
         ++func->spill_num;
     }
 
-    void run() {
+    void run(Func *f) {
+        func = f;
+        rewritten_spillers.clear();
         while (true) {
+            clear();
             infof(func->ir->name + ": reg alloc loop");
             build_liveness(func);
 
             for (uint i = 0; i < K; ++i) if (Regs::inv_allocatable[i] < 32)
                 get_node(Reg::make_pinned(i))->degree = 0x7fffffff;
 
+            for (auto x: rewritten_spillers)
+                get_node(x)->is_spiller = true;
+
             build();
             make_wl();
+
             do {
                 info("reg alloc inner loop");
                 if (!simplify_wl.empty())
@@ -453,10 +486,10 @@ struct Allocater {
             assign_colors();
             if (spilled_nodes.empty())
                 break;
+            infof(spilled_nodes.size(), "nodes are to be spilled");
             rewrite_program();
             clear();
         }
-        clear();
     }
 };
 
@@ -464,5 +497,6 @@ struct Allocater {
 
 // TODO: alloc sp (or just use in mem insts)
 void reg_alloc(Func *f) {
-    reg_allocater::Allocater{f}.run();
+    static reg_allocater::Allocater a;
+    a.run(f);
 }

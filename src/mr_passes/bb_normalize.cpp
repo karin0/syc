@@ -22,6 +22,7 @@ void bb_normalize(Func *f) {
             } else if (branched) {
                 // move i and all after insts into a new bb
                 auto *nbb = f->new_bb_after(bb);
+                nbb->loop_depth = bb->loop_depth;
                 for (Inst *j = i, *j_next; j; j = j_next) {
                     j_next = j->next;
                     bb->insts.erase(j);

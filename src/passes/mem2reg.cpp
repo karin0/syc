@@ -2,15 +2,10 @@
 
 void build_df(Func *f) {
     build_dom(f);
-
-    FOR_BB (u, *f) {
-        u->pred.clear();
-        u->df.clear();
-    }
+    build_pred(f);
 
     FOR_BB (u, *f)
-        for (BB *v : u->get_succ())
-            v->pred.push_back(u);
+        u->df.clear();
 
     // eac
     FOR_BB (u, *f) if (u->pred.size() > 1) {

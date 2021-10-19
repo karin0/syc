@@ -59,12 +59,14 @@ namespace ir {
 using OpKind = tkd::TokenKind;
 
 struct Inst;
+struct BB;
 
 struct Use : Node<Use> {
     Value *value;
     Inst *user;
 
     Use(Value *value, Inst *user);
+    Use(const Use &) = delete;
     Use(Use &&) noexcept;
     ~Use();
 
@@ -96,11 +98,21 @@ struct Value {
     virtual ~Value();
 };
 
+struct Loop {
+    vector<Loop *> chs;
+    Loop *parent = nullptr;
+    int depth;
+    BB *header;
+
+    explicit Loop(BB *header);
+    ~Loop();
+};
+
 struct BB : Node<BB> {
     List<Inst> insts;
 
     bool vis;
-    std::set<BB *> dom, domees;
+    std::set<BB *> dom, dom_chs;
     BB *idom;
     vector<BB *> pred, df;
 
@@ -109,6 +121,7 @@ struct BB : Node<BB> {
     int id;
 
     int dom_depth;
+    Loop *loop = nullptr;
 
     template <class T>
     T *push(T *i) {
@@ -131,6 +144,8 @@ struct BB : Node<BB> {
     // this gives wrong results when multiple control insts are ill-formed,
     // i.e. there are insts after the first control inst in one
     // or after br_induce where BinaryBranchInsts occur
+
+    friend std::ostream &operator << (std::ostream &, const BB &);
 };
 
 #define FOR_INST(i, bb) FOR_LIST(i, (bb).insts)
@@ -142,9 +157,15 @@ struct Func {
     string name;
     int bb_cnt = 0;
 
-    std::set<Func *> callers;
+    std::set<Func *> callers, used_callers;
     bool has_side_effects;
+    bool has_global_loads;
+    bool has_param_loads;
+    bool is_pure;
 
+    vector<Loop *> loop_roots;
+
+    Func(bool returns_int, const char *name);
     Func(bool returns_int, vector<Decl *> &&params, string &&name);
 
     virtual ~Func() = default;
@@ -234,7 +255,7 @@ struct Inst : Value, Node<Inst> {
 
     Inst() = default;
 
-    bool is_pure() const;
+    bool has_side_effects() const;
     bool is_control() const;
 
     virtual mips::Operand build(mips::Builder *) = 0;
@@ -252,6 +273,8 @@ struct BinaryInst : Inst {
     Use lhs, rhs;
 
     BinaryInst(OpKind op, Value *lhs, Value *rhs);
+
+    static bool is_op_mirror(OpKind a, OpKind b);
 
     mips::Operand build(mips::Builder *) override;
 

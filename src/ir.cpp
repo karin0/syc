@@ -94,6 +94,14 @@ vector<BB *> BB::get_succ() const {
 
 Prog::Prog(vector<Decl *> &&globals) : globals(globals) {}
 
+Func::Func(bool returns_int, const char *name) :
+    returns_int(returns_int), name(name) {
+    has_side_effects = true;
+    has_global_loads = true;
+    has_param_loads = false;
+    is_pure = false;
+}
+
 Func::Func(bool returns_int, vector<Decl *> &&params, string &&name) :
     returns_int(returns_int), params(params), name(name) {}
 
@@ -109,14 +117,10 @@ void Func::push_bb(BB *bb) {
     bbs.push(bb);
 }
 
-GetIntFunc::GetIntFunc() : Func(true, {}, "sys_getint") {
-    has_side_effects = true;
-}
-
+GetIntFunc::GetIntFunc() : Func(true, "sys_getint") {}
 PrintfFunc::PrintfFunc(const char *fmt, std::size_t len) :
-    Func(false, {}, "sys_printf"), fmt(fmt), len(len) {
-    has_side_effects = true;
-}
+    Func(false, "sys_printf"), fmt(fmt), len(len) {}
+
 
 Const::Const(int val) : val(val) {}
 
@@ -141,6 +145,23 @@ Undef Undef::VAL;
 
 BinaryInst::BinaryInst(OpKind op, Value *lhs, Value *rhs) :
         op(op), lhs(lhs, this), rhs(rhs, this) {}
+
+bool BinaryInst::is_op_mirror(OpKind a, OpKind b) {
+    using namespace tkd;
+    switch (a) {
+        case Add:
+        case Mul:
+        case Eq:
+        case Ne:
+            return a == b;
+        case Lt: return b == Gt;
+        case Gt: return b == Lt;
+        case Le: return b == Ge;
+        case Ge: return b == Le;
+        default:
+            return false;
+    }
+}
 
 AccessInst::AccessInst(Decl *lhs, Value *base, Value *off) :
     lhs(lhs), base(base, this), off(off, this) {}
@@ -196,12 +217,12 @@ void PhiInst::push(Value *val, BB *bb) {
     vals.emplace_back(Use{val, this}, bb);
 }
 
-bool Inst::is_pure() const {
-    // TODO: CallInst to pure funcs
+// impure Call, Control, Store
+bool Inst::has_side_effects() const {
     if_a (const CallInst, x, this)
-        return !x->func->has_side_effects;
-    return is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
-            || is_a<PhiInst>(this) || is_a<AllocaInst>(this);
+        return x->func->has_side_effects;
+    return !(is_a<BinaryInst>(this) || is_a<LoadInst>(this) || is_a<GEPInst>(this)
+            || is_a<PhiInst>(this) || is_a<AllocaInst>(this));
 }
 
 bool Inst::is_control() const {
