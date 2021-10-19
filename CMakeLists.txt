@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-format-security")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DSYC_DEBUG -DSYC_LOG -fno-omit-frame-pointer -fsanitize=address -fsanitize-address-use-after-scope")
+# set(CMAKE_CXX_FLAGS_DEBUG "-g -DSYC_DEBUG -DSYC_LOG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 add_definitions(
