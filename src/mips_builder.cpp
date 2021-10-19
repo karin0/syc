@@ -615,7 +615,9 @@ Prog build_mr(ir::Prog &ir) {
                     auto t = func->make_vreg();
                     bb->insts.push_front(new MoveInst{x->mach_res, t});
                     for (auto &u: x->vals) {
-                        auto *uv = u.first.value;  // TODO: undef should be eliminated in ir passes
+                        auto *uv = u.first.value;
+                        if (uv == &ir::Undef::VAL)
+                            continue;
                         auto *ubb = u.second->mbb;
 
                         bool found = false;
