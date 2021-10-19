@@ -16,6 +16,8 @@ void run_passes(Prog &prog) {
          << dcbe // TODO: this is required or things break (undef?)
          << gvn_gcm
          << dcbe
+         << gvn_gcm
+         << dcbe
          << br_induce
          << build_loop;
 }
