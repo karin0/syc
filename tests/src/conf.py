@@ -1,5 +1,5 @@
 import multiprocessing
-from cases import *
+from util import *
 
 project_dir = '/home/karin0/lark/buaa/ct/syc'
 mars_path = '/home/karin0/lark/buaa/ct/mars.jar'
@@ -16,6 +16,7 @@ gcc = 'gcc'
 file_dir = path.dirname(path.realpath(__file__))
 header_path = path.join(file_dir, 'common.h')
 
+original_cwd = os.getcwd()
 os.chdir(path.join(file_dir, '..'))
 syc_path = path.realpath('build/syc')
 

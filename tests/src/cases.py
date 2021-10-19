@@ -1,8 +1,7 @@
-import os
-path = os.path
+from conf import path, os, original_cwd
 
 cases_root = '/home/karin0/lark/buaa/ct/cases'
-a_dir = '/home/karin0/lark/buaa/ct/cases/926/testfiles/A'
+root_926 = '/home/karin0/lark/buaa/ct/cases/926/testfiles'
 
 
 def make_course_case(dir, i):
@@ -12,12 +11,38 @@ def make_course_case(dir, i):
 
 
 def get_the_cases():
-    return [make_course_case(a_dir, '13')]
+    return [(path.join(cases_root, 'loop.c'), path.join(cases_root, '1.in'), None)]
+
+
+def resolve_cases(s):
+    if len(s) >= 3 and s[0] in 'ABC' and s[1] == '-':
+        x = s[2:]
+        try:
+            x = int(x)
+        except ValueError:
+            pass
+        else:
+            if x > 0:
+                return [make_course_case(path.join(root_926, s[0]), x)]
+
+    s = path.join(original_cwd, s)
+    if path.isdir(s):
+        src = path.join(s, 'case.txt')
+        if path.isfile(src):
+            inf = path.join(s, 'in.txt')
+            return [(src, inf if path.isfile(inf) else None, None)]
+        return find_cases(s)
+
+    return []
 
 
 def case_iden(s):
     s = path.relpath(s, cases_root)
     a = path.normpath(s).split(os.sep)
+    if len(a) >= 2 and a[-1] == 'case.txt':
+        return a[-2]
+    if len(a) >= 3 and a[-3] == 'out':
+        return 'last_' + a[-2]
     if 'fail-out' in s:
         return 'failure'
     if '926' in s:

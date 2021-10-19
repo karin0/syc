@@ -1,11 +1,12 @@
-import sys
 import time
 import threading
 import collections
 import concurrent.futures as futures
+from argparse import ArgumentParser
 from datetime import datetime
 
 from env import *
+from cases import *
 
 now = datetime.now()
 stats = []
@@ -110,19 +111,11 @@ def get_rid(case):
     return k
 
 
-def main():
-    if len(sys.argv) > 1:
-        arg = sys.argv[1]
-        fail = 'f' in arg
-        no_stat = fail or 'n' in arg
-        spec = 't' in arg
-        if len(sys.argv) > 2:
-            desc = sys.argv[2]
-        else:
-            desc = None
-    else:
-        fail = no_stat = spec = False
-        desc = None
+def main(ns):
+    fail = ns.f
+    desc = ns.m
+    spec = ns.t
+    no_stat = ns.n or fail or spec
 
     print(cpu_count, 'cores found')
     build()
@@ -130,7 +123,7 @@ def main():
     if fail:
         cases = get_fail_cases()
     elif spec:
-        cases = get_the_cases()
+        cases = resolve_cases(spec)
     else:
         cases = get_root_cases()
 
@@ -220,4 +213,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = ArgumentParser()
+    parser.add_argument('-f', action='store_true')
+    parser.add_argument('-n', action='store_true')
+    parser.add_argument('-t')
+    parser.add_argument('-m')
+    parser.parse_args()
+    main(parser.parse_args())
