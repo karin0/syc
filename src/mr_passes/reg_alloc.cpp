@@ -24,7 +24,7 @@ struct Node {
     std::set<Node *> adj_list;
     std::set<MoveInst *> move_list;
     bool colored = false;  // colored_nodes
-    bool is_spiller = false;
+    bool selected_spill = false;
 
     double weight() const {
         return degree / std::pow(2.0, depth);
@@ -43,7 +43,6 @@ struct Allocater {
     vector<Node *> select_stack;
     set<MoveInst *> wl_moves;
     set<Node *> spilled_nodes, coalesced_nodes, spill_wl, freeze_wl, simplify_wl;
-    vector<Operand> rewritten_spillers;
 
     void clear() {
         nodes.clear();
@@ -99,20 +98,18 @@ struct Allocater {
                 }*/
                 if_a (MoveInst, x, i) if (!(is_ignored(x->src) || is_ignored(x->dst))) {
                     auto *u = get_node(x->src), *v = get_node(x->dst);
-                    if (!(u->is_spiller || v->is_spiller)) {
-                        x->active = false;  // initialize active_moves
-                        live.erase(x->src);
-                        u->move_list.insert(x);
-                        v->move_list.insert(x);
-                        wl_moves.insert(x);
-                    }
+                    x->active = false;  // initialize active_moves
+                    live.erase(x->src);
+                    u->move_list.insert(x);
+                    v->move_list.insert(x);
+                    wl_moves.insert(x);
                 }
                 for (auto &d: def)
                     live.insert(d);  // the point is to insert them all to the graph
                 for (auto &d: def)
                     for (auto &l: live) {
-                        if (d != l)
-                            infof(func->ir->name, ": building edge &", d, '&', l);
+                        //if (d != l)
+                        //    infof(func->ir->name, ": building edge &", d, '&', l);
                         add_edge(get_node(l), get_node(d));
                     }
                 for (auto &d: def) {
@@ -319,6 +316,7 @@ struct Allocater {
         spill_wl.erase(it);
         simplify_wl.insert(u);
         freeze_moves(u);
+        u->selected_spill = true;
     }
 
     uint get_color(Node *u) {
@@ -330,37 +328,52 @@ struct Allocater {
         return K;
     }
 
-    void assign_colors() {
-        while (!select_stack.empty()) {
-            auto *u = select_stack.back();
-            select_stack.pop_back();
-            // bool ok_colors[K];
-            std::bitset<K> ok_colors;
-            // std::fill(ok_colors, ok_colors + K, true);
-            ok_colors.set();
-            for (auto *v: u->adj_list) {
-                uint c = get_color(get_alias(v));
-                if (c < K) {
-                    // if (ok_colors.test(c))
-                    //     warnf(func->ir->name, "color", c, Regs::to_name(Regs::allocatable[c]), "is taken for", u->reg);
-                    ok_colors.reset(c);
-                }
+    void color(Node *u) {
+        // bool ok_colors[K];
+        std::bitset<K> ok_colors;
+        // std::fill(ok_colors, ok_colors + K, true);
+        ok_colors.set();
+        for (auto *v: u->adj_list) {
+            uint c = get_color(get_alias(v));
+            if (c < K) {
+                // if (ok_colors.test(c))
+                //     warnf(func->ir->name, "color", c, Regs::to_name(Regs::allocatable[c]), "is taken for", u->reg);
+                ok_colors.reset(c);
             }
-                // ok_colors[c] = false;
-            if (ok_colors.count()) {
-                u->colored = true;
-                u->color = K;
-                for (uint i = 0; i < K; ++i) if (ok_colors.test(i)) {
+        }
+        // ok_colors[c] = false;
+        if (ok_colors.count()) {
+            u->colored = true;
+            u->color = K;
+            for (uint i = 0; i < K; ++i) if (ok_colors.test(i)) {
                     u->color = i;
                     break;
                 }
-                infof(func->ir->name, "coloring", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]), u->color);
-                // TODO: in what order?
-                asserts(u->color < K);
-            } else {
-                infof(func->ir->name, "spilling", u->reg);
-                spilled_nodes.insert(u);
-            }
+            infof(func->ir->name, "coloring", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]), u->color);
+            // TODO: in what order?
+            asserts(u->color < K);
+        } else {
+            infof(func->ir->name, "spilling", u->reg);
+            spilled_nodes.insert(u);
+        }
+    }
+
+    void assign_colors() {
+        vector<Node *> spill_stack;
+        while (!select_stack.empty()) {
+            auto *u = select_stack.back();
+            select_stack.pop_back();
+            if (u->selected_spill)
+                spill_stack.push_back(u);
+            else
+                color(u);
+        }
+
+        while (!spill_stack.empty()) {
+            auto *u = spill_stack.back();
+            spill_stack.pop_back();
+            infof("later", u->reg);
+            color(u);
         }
 
         for (auto *u: coalesced_nodes) {
@@ -394,7 +407,6 @@ struct Allocater {
     }
 
     void rewrite_program() {
-        rewritten_spillers.clear();
         for (auto &u: spilled_nodes)
             spill(u->reg);
     }
@@ -429,18 +441,14 @@ struct Allocater {
                 auto def_use = get_owned_def_use(i);
                 auto *def = def_use.first;
                 if (def && *def == r) {
-                    if (spiller.is_void()) {
+                    if (spiller.is_void())
                         spiller = func->make_vreg();
-                        rewritten_spillers.push_back(spiller);
-                    }
                     *def = spiller;
                     last_def = i;
                 }
                 for (auto *use: def_use.second) if (*use == r) {
-                    if (spiller.is_void()) {
+                    if (spiller.is_void())
                         spiller = func->make_vreg();
-                        rewritten_spillers.push_back(spiller);
-                    }
                     *use = spiller;
                     if (!first_use && !last_def)
                         first_use = i;
@@ -457,7 +465,6 @@ struct Allocater {
 
     void run(Func *f) {
         func = f;
-        rewritten_spillers.clear();
         while (true) {
             clear();
             infof(func->ir->name + ": reg alloc loop");
@@ -465,9 +472,6 @@ struct Allocater {
 
             for (uint i = 0; i < K; ++i) if (Regs::inv_allocatable[i] < 32)
                 get_node(Reg::make_pinned(i))->degree = 0x7fffffff;
-
-            for (auto x: rewritten_spillers)
-                get_node(x)->is_spiller = true;
 
             build();
             make_wl();
@@ -483,6 +487,7 @@ struct Allocater {
                 else if (!spill_wl.empty())
                     select_spill();
             } while (!(simplify_wl.empty() && wl_moves.empty() && freeze_wl.empty() && spill_wl.empty()));
+            info("inner loop ended");
             assign_colors();
             if (spilled_nodes.empty())
                 break;

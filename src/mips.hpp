@@ -107,17 +107,17 @@ namespace Regs {
         t8 = 24, t9 = 25, k0 = 26, k1 = 27, gp = 28, sp = 29, fp = 30, ra = 31,
         MAX = 32;
 
-    constexpr std::array<uint, 16> caller_saved{
+    constexpr std::array<uint, 14> caller_saved{
         v0, v1,
         a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
-        t8, t9
     };
 
-    constexpr std::array<uint, 8> callee_saved{
+    constexpr std::array<uint, 10> callee_saved{
         s0, 17, 18, 19, 20,
         21, 22, 23,
+        t8, t9
     };
 
     // v, a, t seems optimal
@@ -126,9 +126,9 @@ namespace Regs {
         a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
-        t8, t9,
         s0, 17, 18, 19, 20,
         21, 22, 23,
+        t8, t9,
     };
 
     extern uint inv_allocatable[32];

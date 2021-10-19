@@ -106,7 +106,8 @@ int main(int argc, char **argv) {
 
     run_mips_passes(mr);
     {
-        // std::ofstream mrf("mr2.asm");
+        std::ofstream mrf("mr2.asm");
+        mrf << mr;
     }
     *out << mr;
 

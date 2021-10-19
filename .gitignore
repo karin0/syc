@@ -47,6 +47,7 @@ _deps
 
 /cmake-build-*
 /build-*
+/build
 *.txt
 *.asm
 *.zip
