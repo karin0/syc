@@ -269,7 +269,7 @@ static void schedule_late(Inst *i) {
         if_a (Inst, x, u->user) {
             users.insert(x);
             schedule_late(x);
-            BB *ubb = x->bb;
+            BB *ubb;
             if_a (PhiInst, y, x) {
                 bool ok = false;
                 for (auto &p: y->vals)
@@ -279,19 +279,18 @@ static void schedule_late(Inst *i) {
                         break;
                     }
                 asserts(ok);
-            }
+            } else
+                ubb = x->bb;
             lca = lca ? find_lca(lca, ubb) : ubb;
         }
     asserts(lca);
 
     auto *bb = lca;
     while (lca != i->bb) {
+        lca = lca->idom;
         if (loop_depth(lca) < loop_depth(bb))
             bb = lca;
-        lca = lca->idom;
     }
-    if (loop_depth(lca) < loop_depth(bb))
-        bb = lca;
 
     // Reinsert i even if bb != i->bb to order them up after schedule_early
     i->bb->erase(i);
@@ -312,7 +311,8 @@ void gvn_gcm(Func *f) {
     GVN().gvn(f);
     dce(f);
 
-    vector<Inst *> wl;
+    static vector<Inst *> wl;
+    wl.clear();
     FOR_BB_INST (i, bb, *f)
         if (!(i->vis = is_pinned(i)))
             wl.push_back(i);
@@ -325,6 +325,4 @@ void gvn_gcm(Func *f) {
             wl.push_back(i);
     for (auto *i: wl)
         schedule_late(i);
-
-    dbe();
 }
