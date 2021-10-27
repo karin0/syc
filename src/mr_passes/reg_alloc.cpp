@@ -6,13 +6,6 @@
 using std::set;
 using std::unordered_map;
 
-template <>
-struct std::hash<Operand> {
-    size_t operator () (const Operand &k) const {
-        return (k.val << 2) + k.kind;
-    }
-};
-
 namespace reg_allocater {
 
 constexpr uint K = Regs::allocatable.size();
@@ -68,12 +61,12 @@ struct Allocater {
         // TODO: adj_set
         if (u == v || u->adj_list.count(v))
             return;
-        if (!u->reg.is_pinned()) {
+        if (!u->reg.is_machine()) {
             infof("adding v", v->reg, "to adj of u", u->reg);
             u->adj_list.insert(v);
             ++u->degree;
         }
-        if (!v->reg.is_pinned()) {
+        if (!v->reg.is_machine()) {
             infof("adding u", u->reg, "to adj of v", v->reg);
             v->adj_list.insert(u);
             ++v->degree;
@@ -201,7 +194,7 @@ struct Allocater {
         auto *u = get_alias(&nodes[m->dst]);
         auto *v = get_alias(&nodes[m->src]);
         asserts(move_related(&nodes[m->dst]) && move_related(&nodes[m->src]));
-        if (m->src.is_pinned())
+        if (m->src.is_machine())
             std::swap(u, v);
         wl_moves.erase(it);
         if (u == v) {
@@ -210,14 +203,14 @@ struct Allocater {
             add_wl(u);
             return;
         }
-        if (v->reg.is_pinned() || u->adj_list.count(v) || v->adj_list.count(u)) {
+        if (v->reg.is_machine() || u->adj_list.count(v) || v->adj_list.count(u)) {
             // constrained_moves is unused
             infof("constrained_moves, add both", u->reg, "and", v->reg);
             add_wl(u);
             add_wl(v);
             return;
         }
-        bool u_precolored = u->reg.is_pinned();
+        bool u_precolored = u->reg.is_machine();
         auto ad = adjacent(v);
         if ((u_precolored && std::all_of(ad.begin(), ad.end(),
              [&](Node *t) {
@@ -231,7 +224,7 @@ struct Allocater {
     }
 
     void add_wl(Node *u) {
-        if (!u->reg.is_pinned() && u->degree < K && !move_related(u)) {
+        if (!u->reg.is_machine() && u->degree < K && !move_related(u)) {
             infof("add_wl", u->reg);
             freeze_wl.insert(u);
             simplify_wl.insert(u);
@@ -239,7 +232,7 @@ struct Allocater {
     }
 
     static bool ok(Node *t, Node *r) {
-        return t->degree < K || t->reg.is_pinned() || t->adj_list.count(r) || r->adj_list.count(t);
+        return t->degree < K || t->reg.is_machine() || t->adj_list.count(r) || r->adj_list.count(t);
     }
 
     static bool conservative(set<Node *> s) {
@@ -321,7 +314,7 @@ struct Allocater {
 
     uint get_color(Node *u) {
         asserts(u->reg.is_uncolored());
-        if (u->reg.is_pinned())
+        if (u->reg.is_machine())
             return Regs::inv_allocatable[u->reg.val];
         if (u->colored)
             return u->color;
@@ -394,11 +387,11 @@ struct Allocater {
                 auto it = nodes.find(*x);
                 if (it != nodes.end()) {
                     auto &u = it->second;
-                    if (x->is_pinned())
-                        x->kind = Reg::Pinned;
+                    if (x->is_machine())
+                        x->kind = Reg::Machine;
                     else if (u.colored) {
                         infof("replacing", u.reg, *x);
-                        *x = Reg::make_pinned(Regs::allocatable[u.color]); // TODO: QAQ why machined?
+                        *x = Reg::make_machine(Regs::allocatable[u.color]); // TODO: QAQ why machined?
                         infof("to", *x);
                     }
                 }
@@ -422,7 +415,7 @@ struct Allocater {
                     asserts(spiller.is_virtual());
                     infof("use", spiller, "for spilled", r, "at", off);
                     bb->insts.insert(first_use, new LoadInst{
-                        spiller, Reg::make_pinned(Regs::sp), off
+                        spiller, Reg::make_machine(Regs::sp), off
                     });
                     first_use = nullptr;
                 }
@@ -430,7 +423,7 @@ struct Allocater {
                     asserts(spiller.is_virtual());
                     infof("def", spiller, "for spilled", r, "at", off);
                     bb->insts.insert_after(last_def, new StoreInst{
-                        spiller, Reg::make_pinned(Regs::sp), off
+                        spiller, Reg::make_machine(Regs::sp), off
                     });
                     last_def = nullptr;
                 }
@@ -471,7 +464,7 @@ struct Allocater {
             build_liveness(func);
 
             for (uint i = 0; i < K; ++i) if (Regs::inv_allocatable[i] < 32)
-                get_node(Reg::make_pinned(i))->degree = 0x7fffffff;
+                get_node(Reg::make_machine(i))->degree = 0x7fffffff;
 
             build();
             make_wl();

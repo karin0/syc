@@ -18,7 +18,6 @@ std::ostream &operator << (std::ostream &os, const Operand &x) {
         case Operand::Virtual:
             os << "V";
             break;
-        case Operand::Pinned:
         case Operand::Machine:
             os << '$' << Regs::to_name(x.val);
             return os;

@@ -5,6 +5,13 @@
 
 const uint MAX_ARG_REGS = 4;
 
+template <>
+struct std::hash<mips::Operand> {
+    size_t operator () (const mips::Operand &k) const {
+        return (k.val << 2) + k.kind;
+    }
+};
+
 namespace mips {
 
 bool is_imm(int x);

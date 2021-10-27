@@ -19,7 +19,7 @@ struct Operand {
     static constexpr const int MIN_CONST = -2147483648;
 
     enum Kind {
-        Virtual, Pinned, Machine, Const, Void
+        Virtual, Machine, Const, Void
     } kind;
     int val;
 
@@ -28,10 +28,9 @@ struct Operand {
     explicit Operand(int val);
 
     static Operand make_virtual(uint id);
-    static Operand make_pinned(uint id);
+    static Operand make_machine(uint id);
     static Operand make_const(int val);
     static Operand make_void();
-    static Operand make_machine(uint id);
 
     bool is_reg() const;
     bool is_const() const;
@@ -39,9 +38,8 @@ struct Operand {
     bool is_imm() const;
 
     bool is_uncolored() const;
-    bool is_pinned() const;
+    bool is_machine() const;
     bool is_virtual() const;
-    bool is_physical() const;
 
     bool equiv(const Operand &rhs) const;
 
@@ -339,14 +337,14 @@ struct PrintfInst : Inst {
 
  */
 
-struct AccessInst : Inst {
+struct MemInst : Inst {
     Decl *lhs;
     Use base, off;
 
-    AccessInst(Decl *lhs, Value *base, Value *off);
+    MemInst(Decl *lhs, Value *base, Value *off);
 };
 
-struct LoadInst : AccessInst {
+struct LoadInst : MemInst {
     LoadInst(Decl *lhs, Value *base, Value *idx);
 
     mips::Operand build(mips::Builder *) override;
@@ -354,7 +352,7 @@ struct LoadInst : AccessInst {
     void print(std::ostream &) override;
 };
 
-struct StoreInst : AccessInst {
+struct StoreInst : MemInst {
     Use val;
 
     StoreInst(Decl *lhs, Value *base, Value *idx, Value *val);
@@ -364,7 +362,7 @@ struct StoreInst : AccessInst {
     void print(std::ostream &) override;
 };
 
-struct GEPInst : AccessInst {
+struct GEPInst : MemInst {
     int size;
 
     GEPInst(Decl *lhs, Value *base, Value *idx, int size);

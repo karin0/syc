@@ -29,10 +29,10 @@ struct Builder {
         asserts(x.kind != Operand::Void);
         if (x.kind == Operand::Const) {
             if (x.val == 0)
-                return Operand::make_pinned(0);
+                return Operand::make_machine(0);
             if (x.val == DATA_BASE) {
                 prog->gp_used = true;
-                return Operand::make_pinned(Regs::gp);
+                return Operand::make_machine(Regs::gp);
             }
             return move_to_reg(x);
         }
@@ -56,7 +56,7 @@ struct Builder {
     }
 
     void new_syscall(uint no) {
-        push(new MoveInst{Operand::make_pinned(Regs::v0), Operand::make_const(int(no))});
+        push(new MoveInst{Operand::make_machine(Regs::v0), Operand::make_const(int(no))});
         push(new SysInst{no});
     }
 };
@@ -79,7 +79,7 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
 
     // load from sp + 4 * (stack_size + pos - 4)
     auto dst = ctx->make_vreg();
-    auto *load = ctx->push(new mips::LoadInst{dst, Operand::make_pinned(Regs::sp), int(pos)});
+    auto *load = ctx->push(new mips::LoadInst{dst, Operand::make_machine(Regs::sp), int(pos)});
     ctx->func->arg_loads.push_back(load);
     // TODO: load every time or only once?
 
@@ -88,7 +88,7 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
 
 Operand ir::Undef::build_val(mips::Builder *) {
     warn("undef value is used");
-    return Operand::make_pinned(0);
+    return Operand::make_machine(0);
 }
 
 Operand ir::Inst::build_val(mips::Builder *) {
@@ -124,12 +124,12 @@ BinaryInst *new_not(Reg dst, Reg src) {
 }
 
 BinaryInst *new_bool(Reg dst, Reg src) {
-    return new BinaryInst{BinaryInst::Ltu, dst, Operand::make_pinned(0), src};
+    return new BinaryInst{BinaryInst::Ltu, dst, Operand::make_machine(0), src};
 }
 
 static Reg build_neg_reg(Reg x, Builder *ctx) {
     Reg dst = ctx->make_vreg();
-    ctx->push(new BinaryInst{BinaryInst::Sub, dst, Reg::make_pinned(0), x});
+    ctx->push(new BinaryInst{BinaryInst::Sub, dst, Reg::make_machine(0), x});
     return dst;
 }
 
@@ -286,11 +286,11 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
 void build_buf_output(const string &s, Builder *ctx) {
     if (s.size() == 1 || s == "\\n") {
         int c = s.size() == 1 ? s[0] : '\n';
-        ctx->push(new MoveInst{Operand::make_pinned(Regs::a0), Operand::make_const(c)});
+        ctx->push(new MoveInst{Operand::make_machine(Regs::a0), Operand::make_const(c)});
         ctx->new_syscall(11);
     } else {
         uint id = ctx->prog->find_str(s);
-        ctx->push(new LoadStrInst{Operand::make_pinned(Regs::a0), id});
+        ctx->push(new LoadStrInst{Operand::make_machine(Regs::a0), id});
         ctx->new_syscall(4);
     }
 }
@@ -299,7 +299,7 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
     if (is_a<ir::GetIntFunc>(func)) {
         ctx->new_syscall(5);
         // TODO: use v0 or move it to vreg?
-        return ctx->move_to_reg(Operand::make_pinned(Regs::v0));
+        return ctx->move_to_reg(Operand::make_machine(Regs::v0));
     }
     if_a (ir::PrintfFunc, f, func) {
         // <NormalChar> → ⼗进制编码为32,33,40-126的ASCII字符，'\'（编码92）出现当且仅当为'\n'
@@ -324,7 +324,7 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
                     build_buf_output(buf, ctx);
                     buf.clear();
                 }
-                ctx->push(new MoveInst{Operand::make_pinned(Regs::a0), arg});
+                ctx->push(new MoveInst{Operand::make_machine(Regs::a0), arg});
                 ctx->new_syscall(1);
             }
             p += 2;
@@ -340,17 +340,17 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
     for (uint i = 0; i < n; ++i) {
         auto arg = BUILD_USE(args[i]);
         if (i < MAX_ARG_REGS)
-            ctx->push(new MoveInst{Operand::make_pinned(Regs::a0 + i), arg});
+            ctx->push(new MoveInst{Operand::make_machine(Regs::a0 + i), arg});
         else
             ctx->push(new mips::StoreInst{
-                ctx->ensure_reg(arg), Operand::make_pinned(Regs::sp),
+                ctx->ensure_reg(arg), Operand::make_machine(Regs::sp),
                 int((i - MAX_ARG_REGS) * 4)
             });
             // sw to sp + (i-4) * 4
     }
     ctx->push(new mips::CallInst{func});
     if (func->returns_int)
-        return ctx->move_to_reg(Operand::make_pinned(Regs::v0));
+        return ctx->move_to_reg(Operand::make_machine(Regs::v0));
     return Operand::make_void();
 }
 
@@ -364,9 +364,9 @@ Operand ir::BranchInst::build(mips::Builder *ctx) {
             ctx->push(new mips::JumpInst{to->mbb});
     } else {
         if (ctx->bb->next == bb_then->mbb)
-            ctx->push(new BranchInst{BranchInst::Eq, BUILD_USE(cond), Operand::make_pinned(0), bb_else->mbb});
+            ctx->push(new BranchInst{BranchInst::Eq, BUILD_USE(cond), Operand::make_machine(0), bb_else->mbb});
         else {
-            ctx->push(new BranchInst{BranchInst::Ne, BUILD_USE(cond), Operand::make_pinned(0), bb_then->mbb});
+            ctx->push(new BranchInst{BranchInst::Ne, BUILD_USE(cond), Operand::make_machine(0), bb_then->mbb});
             if (ctx->bb->next != bb_else->mbb)
                 ctx->push(new mips::JumpInst{bb_else->mbb});  // TODO: opti
         }
@@ -384,7 +384,7 @@ Operand ir::JumpInst::build(mips::Builder *ctx) {
 Operand ir::ReturnInst::build(mips::Builder *ctx) {
     if (ctx->func->ir->returns_int) {
         asserts(val.value);
-        ctx->push(new MoveInst{Operand::make_pinned(Regs::v0), BUILD_USE(val)});
+        ctx->push(new MoveInst{Operand::make_machine(Regs::v0), BUILD_USE(val)});
     }
     ctx->push(new mips::ReturnInst);
     return Operand::make_void();
@@ -403,9 +403,9 @@ std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
             int d = base.val + off.val, imm;
             if (!is_imm(d) && is_imm(imm = int_cast(uint(d) - DATA_BASE))) {
                 ctx->prog->gp_used = true;
-                return {Operand::make_pinned(Regs::gp), imm};
+                return {Operand::make_machine(Regs::gp), imm};
             }
-            return {Operand::make_pinned(0), base.val + off.val};
+            return {Operand::make_machine(0), base.val + off.val};
         }
         return {base, off.val};
     }
@@ -456,7 +456,7 @@ Operand ir::GEPInst::build(mips::Builder *ctx) {
 Operand ir::AllocaInst::build(mips::Builder *ctx) {
     auto dst = ctx->make_vreg();
     auto *add = ctx->new_binary(mips::BinaryInst::Add, dst,
-        Operand::make_pinned(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
+        Operand::make_machine(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
     infof("alloca val", add->rhs.val);
     // will be fixed with max_call_arg_num
     ctx->func->allocas.push_back(add);
@@ -477,11 +477,11 @@ Operand ir::BinaryBranchInst::build(mips::Builder *ctx) {
     auto lh = BUILD_USE(lhs), rh = BUILD_USE(rhs);
     auto op = this->op;
     infof("bbi building", lh, rh, lhs, rhs);
-    if (lh.is_const() || (lh.is_physical() && lh.val == 0)) {
+    if (lh.is_const() || (lh.is_machine() && lh.val == 0)) {
         std::swap(lh, rh);
         op = ir::BinaryBranchInst::swap_op(op);
     }
-    if (lh.is_const() || (lh.is_physical() && lh.val == 0)) {
+    if (lh.is_const() || (lh.is_machine() && lh.val == 0)) {
         error("uncoalesced const br!");
         auto *to = ir::rel::eval(op, lh.val, rh.val) ? bb_then : bb_else;
         ctx->push(new mips::JumpInst{to->mbb});
@@ -490,8 +490,8 @@ Operand ir::BinaryBranchInst::build(mips::Builder *ctx) {
 
     mips::BaseBranchInst *br;
     auto *to = bb_then->mbb;
-    auto r0 = Reg::make_pinned(0);
-    if (rh.val == 0 && (rh.is_const() || rh.is_physical()))
+    auto r0 = Reg::make_machine(0);
+    if (rh.val == 0 && (rh.is_const() || rh.is_machine()))
         br = new BranchZeroInst{op, lh, to};
     else if (rh.is_reg()) {
         switch (op) {
@@ -588,7 +588,7 @@ Prog build_mr(ir::Prog &ir) {
         auto *bb_start = func->bbs.front;
         uint n = std::min(uint(fun.params.size()), MAX_ARG_REGS);
         for (size_t i = 0; i < n; ++i) {
-            auto src = Operand::make_pinned(Regs::a0 + i);
+            auto src = Operand::make_machine(Regs::a0 + i);
             auto dst = func->make_vreg();
             bb_start->push(new MoveInst{dst, src});
             // auto *value = fun.params[i]->value;  Argument, or removed Alloca

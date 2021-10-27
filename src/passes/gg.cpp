@@ -57,7 +57,7 @@ struct GVN {
     vector<std::pair<Value *, Value *>> vn;
 
     template<class T>
-    Value *find_a(T *k) {
+    Value *find_a(T *) {
         unreachable();
     }
 

@@ -1,6 +1,6 @@
 #include "mips.hpp"
 #include "ir.hpp"
-
+#include <functional>
 
 namespace mips {
 
@@ -52,7 +52,7 @@ void init() {
 }
 
 bool is_callee_saved(Reg r) {
-    return r.is_physical() && bm_callee_saved[r.val];
+    return r.is_machine() && bm_callee_saved[r.val];
 }
 
 }
@@ -106,16 +106,12 @@ Operand Operand::make_virtual(uint id) {
     return Operand{Kind::Virtual, int(id)};
 }
 
-Operand Operand::make_pinned(uint id) {
-    return Operand{Kind::Pinned, int(id)};
+Operand Operand::make_machine(uint id) {
+    return Operand{Kind::Machine, int(id)};
 }
 
 Operand Operand::make_void() {
     return Operand{Kind::Void, 0};
-}
-
-Operand Operand::make_machine(uint id) {
-    return Operand{Kind::Machine, int(id)};
 }
 
 bool Operand::is_reg() const {
@@ -135,24 +131,20 @@ bool Operand::is_imm() const {
 }
 
 bool Operand::is_uncolored() const {
-    return kind == Virtual || kind == Pinned;
+    return kind == Virtual || kind == Machine;
 }
 
-bool Operand::is_pinned() const {
-    return kind == Pinned;
+bool Operand::is_machine() const {
+    return kind == Machine;
 }
 
 bool Operand::is_virtual() const {
     return kind == Virtual;
 }
 
-bool Operand::is_physical() const {
-    return kind == Machine || kind == Pinned;
-}
-
 bool Operand::equiv(const Operand &rhs) const {
-    return (is_physical() && rhs.is_physical() && val == rhs.val) ||
-        (is_virtual() && rhs.is_virtual() && val == rhs.val);
+    return (is_machine() && rhs.is_machine() && val == rhs.val) ||
+           (is_virtual() && rhs.is_virtual() && val == rhs.val);
 }
 
 bool Operand::operator < (const Operand &rhs) const {

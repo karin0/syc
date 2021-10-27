@@ -112,6 +112,9 @@ bool is_a(U *p) {
 #define if_a(T, x, p) if (auto *x = dynamic_cast<T *>(p))
 
 template <typename T, typename U>
-void vec_erase_if(T &c, U pred) {
-    c.erase(std::remove_if(c.begin(), c.end(), pred), c.end());
+std::size_t vec_erase_if(T &c, U pred) {
+    auto it = std::remove_if(c.begin(), c.end(), pred);
+    auto r = std::distance(it, c.end());
+    c.erase(it, c.end());
+    return r;
 }

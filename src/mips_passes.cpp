@@ -18,8 +18,8 @@ void run_mips_passes(Prog &prog) {
     Regs::init();
 
     prog << bb_normalize
-         << move_coalesce  // must preserve arg_loads & allocas
-         // << dce  // slows down A-13 but speeds A-27
+         // << dce  // slows down A-13 but speeds A-2
+         << move_coalesce  // must preserve arg_loads & allocas7
          << reg_alloc << dce << move_coalesce << dce << reg_restore;
 
     // TODO: movz, movn; madd; reduce syscall lis; alloc sp (or just use sp in load/store)

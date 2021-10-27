@@ -23,10 +23,12 @@ std::pair<vector<Reg>, vector<Reg>> get_def_use(Inst *i, Func *f) {
     else if_a (CallInst, x, i) {
         vector<Reg> def, use;
         uint n = std::min(uint(x->func->params.size()), MAX_ARG_REGS);
+        def.reserve(Regs::callee_saved.size());
         for (auto i: Regs::caller_saved)  // sp, ra are not allocation candidates
-            def.emplace_back(Reg::Pinned, i);
+            def.emplace_back(Reg::Machine, i);
+        use.reserve(n);
         for (uint i = 0; i < n; ++i)
-            use.emplace_back(Reg::Pinned, Regs::a0 + i);
+            use.emplace_back(Reg::Machine, Regs::a0 + i);
         return {def, use};
     } else if_a (BranchInst, x, i)
         return {{}, {x->lhs, x->rhs}};
@@ -34,7 +36,7 @@ std::pair<vector<Reg>, vector<Reg>> get_def_use(Inst *i, Func *f) {
         return {{}, {x->lhs}};
     else if (is_a<ReturnInst>(i)) {
         if (f->ir->returns_int)
-            return {{}, {Reg::make_pinned(Regs::v0)}};
+            return {{}, {Reg::make_machine(Regs::v0)}};
         return {{}, {}};
     } else if_a (LoadInst, x, i)
         return {{x->dst}, {x->base}};
@@ -43,9 +45,9 @@ std::pair<vector<Reg>, vector<Reg>> get_def_use(Inst *i, Func *f) {
     else if_a (SysInst, x, i) {
         switch (x->no) {
             case 1: case 4: case 11:
-                return {{}, {Reg::make_pinned(Regs::v0), Reg::make_pinned(Regs::a0)}};
+                return {{}, {Reg::make_machine(Regs::v0), Reg::make_machine(Regs::a0)}};
             case 5:
-                return {{Reg::make_pinned(Regs::v0)}, {Reg::make_pinned(Regs::v0)}};
+                return {{Reg::make_machine(Regs::v0)}, {Reg::make_machine(Regs::v0)}};
             default:
                 unreachable();
         }
@@ -141,7 +143,7 @@ vector<Reg> get_def(Inst *i) {
 
 // TODO: drop ignored, colored, Machine/Pinned
 bool is_ignored(const Operand &x) {
-    return !(x.is_virtual() || (x.is_pinned() && Regs::inv_allocatable[x.val] < 32));
+    return !(x.is_virtual() || (x.is_machine() && Regs::inv_allocatable[x.val] < 32));
 }
 
 static void remove_colored(vector<Reg> &v) {

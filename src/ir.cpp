@@ -163,17 +163,17 @@ bool BinaryInst::is_op_mirror(OpKind a, OpKind b) {
     }
 }
 
-AccessInst::AccessInst(Decl *lhs, Value *base, Value *off) :
+MemInst::MemInst(Decl *lhs, Value *base, Value *off) :
     lhs(lhs), base(base, this), off(off, this) {}
 
 LoadInst::LoadInst(Decl *lhs, Value *base, Value *off) :
-    AccessInst(lhs, base, off) {}
+    MemInst(lhs, base, off) {}
 
 StoreInst::StoreInst(Decl *lhs, Value *base, Value *off, Value *val) :
-    AccessInst(lhs, base, off), val(val, this) {}
+    MemInst(lhs, base, off), val(val, this) {}
 
 GEPInst::GEPInst(Decl *lhs, Value *base, Value *off, int size) :
-    AccessInst(lhs, base, off), size(size) {}
+    MemInst(lhs, base, off), size(size) {}
 
 BranchInst::BranchInst(Value *cond, BB *bb_then, BB *bb_else) :
     cond(cond, this), bb_then(bb_then), bb_else(bb_else) {}
