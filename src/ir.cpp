@@ -117,9 +117,9 @@ void Func::push_bb(BB *bb) {
     bbs.push(bb);
 }
 
-GetIntFunc::GetIntFunc() : Func(true, "sys_getint") {}
+GetIntFunc::GetIntFunc() : Func(true, "getint") {}
 PrintfFunc::PrintfFunc(const char *fmt, std::size_t len) :
-    Func(false, "sys_printf"), fmt(fmt), len(len) {}
+    Func(false, "printf"), fmt(fmt), len(len) {}
 
 
 Const::Const(int val) : val(val) {}
