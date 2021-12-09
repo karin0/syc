@@ -15,10 +15,16 @@
     #include <unistd.h>
 #endif
 
-constexpr const char *input_file = "testfile.txt";
-// constexpr const char *output_file = "output.txt";
-// constexpr const char *output_file = "error.txt";
-constexpr const char *output_file = "mips.txt";
+const char *input_file = "testfile.txt";
+// const char *output_file = "output.txt";
+// const char *output_file = "error.txt";
+const char *output_file = "mips.txt";
+
+#define FILE_PRE "testfilei_19373348_王廉杰_优化"
+const char *naive_ir_file = FILE_PRE "前中间代码.txt";
+const char *ir_file = FILE_PRE "后中间代码.txt";
+const char *naive_asm_file = FILE_PRE "前目标代码.txt";
+const char *asm_file = FILE_PRE "后目标代码.txt";
 
 string read_file(const char *file) {
     std::ifstream inf(file, std::ios::binary | std::ios::ate);
@@ -57,17 +63,22 @@ std::pair<string, const char *> parse_args(int argc, char **argv) {
         return {read_stdin(), nullptr};
 }
 
-#ifdef SYC_DUMP
 template <class T>
-void debug_put(T &x, const char *file) {
+static void put_file(T &x, const char *file) {
     std::ofstream f(file);
     f << x;
 }
+
+#undef SYC_DUMP
+
+#ifdef SYC_DUMP
+    #define debug_put put_file
+    #define extra_put(...) void(0)
 #else
     #define debug_put(...) void(0)
+    #define extra_put put_file
+    #define SYC_EXTRA
 #endif
-
-const char *check(vector<Token> &tokens);
 
 void work(int argc, char **argv) {
     std::ofstream outf;
@@ -113,11 +124,17 @@ void work(int argc, char **argv) {
     info("read %zu bytes", src.size());
 
     vector<Token> tokens = lex(&src[0]);
-    if (const char *s = check(tokens)) {
-        info("hit");
-        *out << s;
-        return;
-    }
+
+#ifdef SYC_EXTRA
+    ast::Prog naive_ast = parse(tokens);
+    ir::Prog naive_ir = build_ir(std::move(naive_ast));
+    run_passes(naive_ir, false);
+    extra_put(naive_ir, naive_ir_file);
+
+    mips::Prog naive_mr = build_mr(naive_ir);
+    run_mips_passes(naive_mr);
+    extra_put(naive_mr, naive_asm_file);
+#endif
 
     ast::Prog ast = parse(tokens);
 
@@ -131,17 +148,18 @@ void work(int argc, char **argv) {
 
     run_passes(ir);
     debug_put(ir, "ir2.txt");
+    extra_put(ir, ir_file);
 
     mips::Prog mr = build_mr(ir);
     debug_put(mr, "mr.asm");
 
     run_mips_passes(mr);
     debug_put(mr, "mr2.asm");
+    extra_put(ir, asm_file);
 
     *out << mr;
 
     info("bye");
-    *out << ".text\nnop\n";
 }
 
 int main(int argc, char **argv) {

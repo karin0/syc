@@ -11,7 +11,11 @@ static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
     return lh;
 }
 
-void run_passes(Prog &prog) {
+void run_passes(Prog &prog, bool opt) {
+    if (!opt) {
+        prog << dcbe;
+        return;
+    }
     prog << dcbe << mem2reg
          << dcbe // TODO: this is required or things break (undef?)
          << gvn_gcm
