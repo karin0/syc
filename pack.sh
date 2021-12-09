@@ -6,4 +6,4 @@ fi
 cd src
 zip ../syc.zip -r . # CMakeLists.txt tests/src/*.py
 cd ..
-zip -u syc.zip CMakeLists.txt pack.sh
+zip -u syc.zip CMakeLists.txt  # pack.sh
