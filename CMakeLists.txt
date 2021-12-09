@@ -9,13 +9,16 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DSYC_DEBUG -DSYC_LOG -fno-omit-frame-pointer -fsa
 # set(CMAKE_CXX_FLAGS_DEBUG "-g -DSYC_DEBUG -DSYC_LOG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-add_definitions(
-        # -DSYC_LOG
+IF(NOT DEFINED ENV{PLAIN})
+    add_definitions(
+        -DSYC_LOG
         -DSYC_STDIN
         -DSYC_STDOUT
         -DSYC_ASSERTS
-)
+    )
+ENDIF()
+
 file(GLOB_RECURSE src_files "src/*")
-include_directories(src)
+include_directories(src src/passes src/mr_passes)
 
 add_executable(syc ${src_files})
