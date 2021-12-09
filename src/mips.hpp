@@ -110,7 +110,7 @@ $ra	$31	return address	N/A
 
 namespace Regs {
 
-    constexpr uint v0 = 2, v1 = 3, a0 = 4, t0 = 8, s0 = 16, s7 = 23,
+    constexpr uint at = 1, v0 = 2, v1 = 3, a0 = 4, t0 = 8, s0 = 16, s7 = 23,
         t8 = 24, t9 = 25, k0 = 26, k1 = 27, gp = 28, sp = 29, fp = 30, ra = 31,
         MAX = 32;
 
@@ -158,7 +158,7 @@ struct Inst : Node<Inst> {
 
 struct BinaryInst : Inst {  // add, sub, slt ?
     enum Op {
-        Add, Sub, Lt, Ltu, Xor
+        Add, Sub, Lt, Ltu, Xor, Mul
     } op;
     Reg dst, lhs;
     Operand rhs;  // value range is ignored
@@ -170,7 +170,7 @@ struct BinaryInst : Inst {  // add, sub, slt ?
 
 struct ShiftInst : Inst {
     enum Op {
-        Ll, Rl
+        Ll, Rl, Ra
     } op;
     Reg dst, lhs;
     uint rhs;

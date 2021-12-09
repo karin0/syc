@@ -147,6 +147,8 @@ const char *bin_name_r(BinaryInst::Op op) {
             return "sltu";
         case BinaryInst::Xor:
             return "xor";
+        case BinaryInst::Mul:
+            return "mul";
         default:
             unreachable();
     }
@@ -162,6 +164,8 @@ const char *bin_name_i(BinaryInst::Op op) {
             return "sltiu";
         case BinaryInst::Xor:
             return "xori";
+        case BinaryInst::Mul:
+            return "mul";  // XXX: pseudo inst used
         default:
             unreachable();
     }
@@ -188,6 +192,9 @@ void ShiftInst::print(std::ostream &os) const {
             break;
         case Rl:
             os << "srl ";
+            break;
+        case Ra:
+            os << "sra ";
             break;
         default:
             unreachable();
