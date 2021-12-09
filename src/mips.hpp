@@ -121,21 +121,21 @@ namespace Regs {
         13, 14, 15,
     };
 
-    constexpr std::array<uint, 10> callee_saved{
+    constexpr std::array<uint, 11> callee_saved{
         s0, 17, 18, 19, 20,
         21, 22, 23,
-        t8, t9
+        t8, t9, fp
     };
 
     // v, a, t seems optimal
-    constexpr std::array<uint, 24> allocatable{
+    constexpr std::array<uint, 25> allocatable{
         v0, v1,
         a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
         s0, 17, 18, 19, 20,
         21, 22, 23,
-        t8, t9,
+        t8, t9, fp
     };
 
     extern uint inv_allocatable[32];

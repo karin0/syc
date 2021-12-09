@@ -1,4 +1,4 @@
-#include "../mips.hpp"
+#include "mips.hpp"
 
 using namespace mips;
 

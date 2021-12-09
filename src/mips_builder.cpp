@@ -78,10 +78,10 @@ Operand ir::Argument::build_val(mips::Builder *ctx) {
         return mach_res;
 
     // load from sp + 4 * (stack_size + pos - 4)
+    // load for only once
     auto dst = ctx->make_vreg();
     auto *load = ctx->push(new mips::LoadInst{dst, Operand::make_machine(Regs::sp), int(pos)});
     ctx->func->arg_loads.push_back(load);
-    // TODO: load every time or only once?
 
     return mach_res = dst;
 }

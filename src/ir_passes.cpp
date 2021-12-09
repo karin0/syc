@@ -1,4 +1,4 @@
-#include "passes/ir_common.hpp"
+#include "ir_common.hpp"
 
 void dcbe(Func *);
 void mem2reg(Func *);

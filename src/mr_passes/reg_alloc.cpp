@@ -449,6 +449,7 @@ struct Allocater {
                 if (cnt++ > 30) {
                     cp();
                     // TODO: cnt = 0 ?
+                    cnt = 0;
                 }
             }
             cp();

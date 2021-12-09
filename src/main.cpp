@@ -7,16 +7,18 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
 
 constexpr const char *input_file = "testfile.txt";
 // constexpr const char *output_file = "output.txt";
-constexpr const char *output_file = "error.txt";
+// constexpr const char *output_file = "error.txt";
+constexpr const char *output_file = "mips.txt";
 
 string read_file(const char *file) {
     std::ifstream inf(file, std::ios::binary | std::ios::ate);
     if (!inf) {
         std::perror("Cannot open input file");
-        std::exit(1);
+        std::quick_exit(1);
     }
     auto size = inf.tellg();
     info("input file has size %d", size);
@@ -26,7 +28,7 @@ string read_file(const char *file) {
     return s;
 }
 
-constexpr int buf_size = 10;
+constexpr int buf_size = 100;
 char read_buf[buf_size + 1];
 
 string read_stdin() {
@@ -49,20 +51,20 @@ std::pair<string, const char *> parse_args(int argc, char **argv) {
         return {read_stdin(), nullptr};
 }
 
-int main(int argc, char **argv) {
+void work(int argc, char **argv) {
     std::ofstream outf;
-    std::ostream *out;
+    std::ostream *out = &outf;
 
 #ifdef SYC_STDIN
     auto p = parse_args(argc, argv);
     auto &src = p.first;
-    if (p.second) {
+    if (p.second)
         outf.open(p.second);
-        out = &outf;
-    } else
+    else
         out = &std::cout;
 #else
-    auto src = read_file(input_file);
+     auto src = read_file(input_file);
+    outf.open(output_file);
 #endif
 
 #ifdef SYC_STDOUT
@@ -97,7 +99,6 @@ int main(int argc, char **argv) {
         std::ofstream irf("ir2.txt");
         irf << ir;
     }
-
     mips::Prog mr = build_mr(ir);
     {
         std::ofstream mrf("mr.asm");
@@ -112,7 +113,11 @@ int main(int argc, char **argv) {
     *out << mr;
 
     info("bye");
+    *out << ".text\nnop\n";
     ir::no_value_check = true;
+}
 
-    return 0;
+int main(int argc, char **argv) {
+    work(argc, argv);
+    std::quick_exit(0);
 }

@@ -1,4 +1,4 @@
-#include "passes/ir_common.hpp"
+#include "ir_common.hpp"
 #include "ir_builder.hpp"
 #include "common.hpp"
 
