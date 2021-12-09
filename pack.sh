@@ -1,5 +1,9 @@
 #!/bin/bash
-if [ -f src.zip ]; then
-    rm src.zip
+set -e
+if [ -f syc.zip ]; then
+    rm syc.zip
 fi
-zip -r src.zip ./src
+cd src
+zip ../syc.zip -r . # CMakeLists.txt tests/src/*.py
+cd ..
+zip -u syc.zip CMakeLists.txt
