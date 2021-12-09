@@ -123,17 +123,6 @@ void work(int argc, char **argv) {
 
     vector<Token> tokens = lex(&src[0]);
 
-#ifdef SYC_EXTRA
-    ast::Prog naive_ast = parse(tokens);
-    ir::Prog naive_ir = build_ir(std::move(naive_ast));
-    run_passes(naive_ir, false);
-    extra_put(naive_ir, naive_ir_file);
-
-    mips::Prog naive_mr = build_mr(naive_ir);
-    run_mips_passes(naive_mr);
-    extra_put(naive_mr, naive_asm_file);
-#endif
-
     ast::Prog ast = parse(tokens);
 
     HANDLE_ERR(
@@ -156,6 +145,17 @@ void work(int argc, char **argv) {
     extra_put(ir, asm_file);
 
     *out << mr;
+
+#ifdef SYC_EXTRA
+    ast::Prog naive_ast = parse(tokens);
+    ir::Prog naive_ir = build_ir(std::move(naive_ast));
+    run_passes(naive_ir, false);
+    extra_put(naive_ir, naive_ir_file);
+
+    mips::Prog naive_mr = build_mr(naive_ir);
+    run_mips_passes(naive_mr);
+    extra_put(naive_mr, naive_asm_file);
+#endif
 
     info("bye");
 }
