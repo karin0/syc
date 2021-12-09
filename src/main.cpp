@@ -9,6 +9,12 @@
 #include <fstream>
 #include <cstdlib>
 
+#ifdef SYC_DEBUG
+    #include <cerrno>
+    #include <sys/stat.h>
+    #include <unistd.h>
+#endif
+
 constexpr const char *input_file = "testfile.txt";
 // constexpr const char *output_file = "output.txt";
 // constexpr const char *output_file = "error.txt";
@@ -51,6 +57,18 @@ std::pair<string, const char *> parse_args(int argc, char **argv) {
         return {read_stdin(), nullptr};
 }
 
+#ifdef SYC_DEBUG
+template <class T>
+void debug_put(T &x, const char *file) {
+    std::ofstream f(file);
+    f << x;
+}
+#else
+    #define debug_put(...) void(0)
+#endif
+
+const char *check(vector<Token> &tokens);
+
 void work(int argc, char **argv) {
     std::ofstream outf;
     std::ostream *out = &outf;
@@ -63,7 +81,7 @@ void work(int argc, char **argv) {
     else
         out = &std::cout;
 #else
-     auto src = read_file(input_file);
+    auto src = read_file(input_file);
     outf.open(output_file);
 #endif
 
@@ -76,6 +94,17 @@ void work(int argc, char **argv) {
 
 #ifdef SYC_DEBUG
     info("debug build");
+    errno = 0;
+    int r = mkdir("syc_tmp", 0755);
+    if (r < 0 && errno != EEXIST) {
+        std::perror("Cannot create temp dir");
+        std::quick_exit(1);
+    }
+    r = chdir("syc_tmp");
+    if (r < 0) {
+        std::perror("Cannot chdir to temp dir");
+        std::quick_exit(1);
+    }
 #endif
 
     info("read %zu bytes", src.size());
@@ -89,35 +118,25 @@ void work(int argc, char **argv) {
     )
 
     ir::Prog ir = build_ir(std::move(ast));
-    {
-        std::ofstream irf("ir.txt");
-        irf << ir;
-    }
+    debug_put(ir, "ir.txt");
 
     run_passes(ir);
-    {
-        std::ofstream irf("ir2.txt");
-        irf << ir;
-    }
+    debug_put(ir, "ir2.txt");
+
     mips::Prog mr = build_mr(ir);
-    {
-        std::ofstream mrf("mr.asm");
-        mrf << mr;
-    }
+    debug_put(mr, "mr.asm");
 
     run_mips_passes(mr);
-    {
-        std::ofstream mrf("mr2.asm");
-        mrf << mr;
-    }
+    debug_put(mr, "mr2.asm");
+
     *out << mr;
 
     info("bye");
     *out << ".text\nnop\n";
-    ir::no_value_check = true;
 }
 
 int main(int argc, char **argv) {
     work(argc, argv);
+    ir::no_value_check = true;
     std::quick_exit(0);
 }
