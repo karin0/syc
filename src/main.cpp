@@ -69,8 +69,6 @@ static void put_file(T &x, const char *file) {
     f << x;
 }
 
-#undef SYC_DUMP
-
 #ifdef SYC_DUMP
     #define debug_put put_file
     #define extra_put(...) void(0)
