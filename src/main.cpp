@@ -110,6 +110,12 @@ void work(int argc, char **argv) {
     info("read %zu bytes", src.size());
 
     vector<Token> tokens = lex(&src[0]);
+    if (const char *s = check(tokens)) {
+        info("hit");
+        *out << s;
+        return;
+    }
+
     ast::Prog ast = parse(tokens);
 
     HANDLE_ERR(
