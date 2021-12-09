@@ -133,29 +133,105 @@ static Reg build_neg_reg(Reg x, Builder *ctx) {
     return dst;
 }
 
-static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {  // TODO
+static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {
     asserts(lh.is_reg());
     if (rh == 0)
         return Operand::make_const(0);
     if (rh == 1)
         return lh;
     bool neg = rh < 0;
-    uint rhu = rh;
+    uint a = rh;
     if (neg)
-        rhu = -rhu;  // -rh could overflow (0x80000000)
-    uint w = 31 - __builtin_clz(rhu);  // todo: use x & (x-1)
+        a = -a;  // -rh in int can overflow (0x80000000)
     Reg dst = ctx->make_vreg();
-    if ((1u << w) == rhu) {
-        ctx->push(new ShiftInst{ShiftInst::Ll, dst, lh, w});
-        if (neg && rhu != uint(rh))
+    if (!(a & (a - 1))) {
+        ctx->push(new ShiftInst{ShiftInst::Ll, dst, lh, uint(__builtin_ctz(a))});
+        if (neg && a != uint(rh))
             return build_neg_reg(dst, ctx);
-    } else {
-        Reg rht = ctx->make_vreg();
-        ctx->push(new MoveInst{rht, Operand::make_const(rh)});
-        ctx->push(new MultInst{lh, rht});
-        ctx->push(new MFLoInst{dst});
-    }
+    } else
+        ctx->new_binary(BinaryInst::Mul, dst, lh, Operand::make_const(rh));
     return dst;
+}
+
+static Operand build_reg_div_const(Reg lh, int d, bool is_mod, Builder *ctx) {
+    uint a = std::abs(d);
+
+    if (a == 1) {
+        auto dst = ctx->make_vreg();
+        if (is_mod)
+            return Operand::make_const(0);
+        if (d == 1)
+            ctx->push(new MoveInst{dst, lh});
+        else
+            ctx->push(new BinaryInst{BinaryInst::Sub, dst, Reg::make_machine(0), lh});
+        return dst;
+    }
+
+    Reg dst;
+    if (!(a & (a - 1))) {
+        // TODO: handle mod
+        uint l = __builtin_ctz(a);
+        auto v0 = ctx->make_vreg();
+        ctx->push(new ShiftInst{ShiftInst::Ra, v0, lh, l - 1});
+        auto v1 = ctx->make_vreg();
+        ctx->push(new ShiftInst{ShiftInst::Rl, v1, v0, 32 - l});
+        auto v2 = ctx->make_vreg();
+        ctx->push(new BinaryInst{BinaryInst::Add, v2, lh, v1});
+        dst = ctx->make_vreg();
+        ctx->push(new ShiftInst{ShiftInst::Ra, dst, v2, l});
+    } else {
+        using u64 = std::uint64_t;
+        u64 t = 1ull << 31;
+        u64 n = t - t % a - 1;
+        u64 p = 1ull << 32;
+        uint s = 0;
+        while (p <= n * (a - p % a))
+            p <<= 1, ++s;
+        u64 m = (p + a - p % a) / a;
+        int c = int(m & ((1ull << 32) - 1));
+
+        // v1 = hi(a * m)
+        auto v0 = ctx->make_vreg();
+        ctx->push(new MoveInst{v0, Reg::make_const(c)});
+        ctx->push(new MultInst{lh, v0});
+
+        auto v1 = ctx->make_vreg();
+        ctx->push(new MFHiInst{v1});
+
+        if (m >= 1u << 31) {
+            auto v = ctx->make_vreg();
+            ctx->push(new BinaryInst{BinaryInst::Add, v, v1, lh});
+            v1 = v;
+        }
+
+        // v2 = v1 sra s
+        Reg v2;
+        if (s) {
+            v2 = ctx->make_vreg();
+            ctx->push(new ShiftInst{ShiftInst::Ra, v2, v1, s});
+        } else
+            v2 = v1;
+
+        // dst = sign(d) * (is_neg(lh) + v2)
+        // d > 0: dst = sgn + v2 = v2 - (-sgn)
+        // d < 0: dst = -sgn - v2
+        dst = ctx->make_vreg();
+        auto v3 = ctx->make_vreg();
+        ctx->push(new ShiftInst{ShiftInst::Ra, v3, lh, 31});
+        if (d > 0)
+            ctx->push(new BinaryInst{BinaryInst::Sub, dst, v2, v3});
+        else
+            ctx->push(new BinaryInst{BinaryInst::Sub, dst, v3, v2});
+    }
+
+    if (!is_mod)
+        return dst;
+
+    // ctx->push(new BinaryInst{BinaryInst::Mul, v4, dst, Reg::make_const(d)});  // TODO: opti
+    auto v4 = build_reg_mult_const(dst, d, ctx);
+    auto r = ctx->make_vreg();
+    ctx->push(new BinaryInst{BinaryInst::Sub, r, lh, v4});
+    return r;
 }
 
 Operand ir::BinaryInst::build(mips::Builder *ctx) {
@@ -166,6 +242,8 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
             return Operand::make_const(ir::eval_bin(op, lh.val, rh.val));
 
     if (op == tkd::Div || op == tkd::Mod) {  // TODO
+        if (rh.is_const())
+            return build_reg_div_const(lh, rh.val, op == tkd::Mod, ctx);
         auto dst = ctx->make_vreg();
         lh = ctx->ensure_reg(lh);
         rh = ctx->ensure_reg(rh);
@@ -177,18 +255,17 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         return dst;
     }
 
-    if (op == tkd::Mul) {  // TODO: opti
+    using mips::BinaryInst;
+
+    if (op == tkd::Mul) {
         if (lh.is_const())
             return build_reg_mult_const(rh, lh.val, ctx);
         if (rh.is_const())
             return build_reg_mult_const(lh, rh.val, ctx);
-        ctx->push(new MultInst{lh, rh});
         auto dst = ctx->make_vreg();
-        ctx->push(new MFLoInst{dst});
+        ctx->push(new BinaryInst{BinaryInst::Mul, dst, lh, rh});
         return dst;
     }
-
-    using mips::BinaryInst;
 
     auto dst = ctx->make_vreg();
     if (lh.kind == Operand::Const) {
@@ -244,9 +321,8 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
             // r1 <= r2  : !(r2 < r1)
             // r1 <= imm : r1 < imm + 1
             if (rh.kind == Operand::Const) {
-                if (rh.val == Operand::MAX_CONST) {
+                if (rh.val == Operand::MAX_CONST)
                     return Operand::make_const(1); // dst is discarded
-                }
                 ctx->new_binary(BinaryInst::Lt, dst, lh, Operand::make_const(rh.val + 1));
             } else {
                 auto nt = ctx->make_vreg();
