@@ -11,10 +11,10 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 IF(NOT DEFINED ENV{PLAIN})
     add_definitions(
-        -DSYC_LOG
         -DSYC_STDIN
         -DSYC_STDOUT
         -DSYC_ASSERTS
+        -DSYC_DUMP
     )
 ENDIF()
 

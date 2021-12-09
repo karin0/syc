@@ -41,7 +41,11 @@ def _run(rid, src_file, in_file, ans_file, runner=default_runner):
     mkdir(rid)
 
     for fn in os.listdir(rid):
-        os.remove(path.join(rid, fn))
+        file = path.join(rid, fn)
+        try:
+            os.remove(file)
+        except IsADirectoryError:
+            shutil.rmtree(file)
 
     if src_file:
         case_fn = path.join(rid, 'case.txt')

@@ -9,7 +9,7 @@
 #include <fstream>
 #include <cstdlib>
 
-#ifdef SYC_DEBUG
+#ifdef SYC_DUMP
     #include <cerrno>
     #include <sys/stat.h>
     #include <unistd.h>
@@ -57,7 +57,7 @@ std::pair<string, const char *> parse_args(int argc, char **argv) {
         return {read_stdin(), nullptr};
 }
 
-#ifdef SYC_DEBUG
+#ifdef SYC_DUMP
 template <class T>
 void debug_put(T &x, const char *file) {
     std::ofstream f(file);
@@ -94,6 +94,9 @@ void work(int argc, char **argv) {
 
 #ifdef SYC_DEBUG
     info("debug build");
+#endif
+
+#ifdef SYC_DUMP
     errno = 0;
     int r = mkdir("syc_tmp", 0755);
     if (r < 0 && errno != EEXIST) {
