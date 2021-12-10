@@ -51,6 +51,10 @@ static void build_children(BB *u, Func *f) {
         else
             f->loop_roots.push_back(loop);
     }
+    while (loop) {
+        loop->bbs.push_back(u);
+        loop = loop->parent;
+    }
 }
 
 static void set_depth(Loop *u, int depth) {

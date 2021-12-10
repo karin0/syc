@@ -92,6 +92,19 @@ vector<BB *> BB::get_succ() const {
     unreachable();
 }
 
+vector<BB **> BB::get_succ_mut() const {
+    auto *i = get_control();
+    if_a (BranchInst, x, i)
+        return {&x->bb_then, &x->bb_else};
+    if_a (BinaryBranchInst, x, i)
+        return {&x->bb_then, &x->bb_else};
+    if_a (JumpInst, x, i)
+        return {&x->bb_to};
+    if (as_a<ReturnInst>(i))
+        return {};
+    unreachable();
+}
+
 Prog::Prog(vector<Decl *> &&globals) : globals(globals) {}
 
 Func::Func(bool returns_int, const char *name) :
@@ -114,6 +127,7 @@ BB *Func::new_bb() {
 void Func::push_bb(BB *bb) {
     // debug("%s: pushing bb_to %d", name.data(), bb_cnt);
     bb->id = bb_cnt++;
+    bb->func = this;
     bbs.push(bb);
 }
 

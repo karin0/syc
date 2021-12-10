@@ -683,6 +683,8 @@ Prog build_mr(ir::Prog &ir) {
     ctx.prog = &res;
     res.funcs.reserve(ir.funcs.size());
     for (auto &fun: ir.funcs) {
+        if (fun.is_unused)
+            continue;
         res.funcs.emplace_back(&fun);
         auto *func = &res.funcs.back();
 

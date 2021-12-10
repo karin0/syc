@@ -31,14 +31,26 @@ static Value *simplify_bin(BinaryInst *x) {
     return nullptr;
 }
 
+void drop_bb(BB *u, Func *f) {
+    FOR_LIST_MUT (i, u->insts) {
+        u->erase_with(i, nullptr);
+        delete i;
+    }
+    f->bbs.erase(u);
+    delete u;
+}
+
 // This ensures BB::get_succ works properly and all bbs are reachable
-void dbe(Func *f) {
+bool dbe(Func *f) {
+    bool res = false;
+
     FOR_BB (bb, *f) {
         bool end = false;
         FOR_LIST_MUT (i, bb->insts) {
             if (end) {
                 bb->erase(i);
                 delete i;
+                res = true;
             } else if (i->is_control())
                 end = true;
         }
@@ -50,6 +62,7 @@ void dbe(Func *f) {
         if (v) {
             bb->erase_with(x, v);
             delete x;
+            res = true;
         }
     }
 
@@ -62,6 +75,7 @@ void dbe(Func *f) {
                 j->bb = bb;
                 bb->insts.replace(i, j);
                 delete i;
+                res = true;
             }
         }
     }
@@ -89,17 +103,13 @@ void dbe(Func *f) {
                 }
             }
 
-            FOR_LIST_MUT (i, u->insts) {
-                // i->replace_uses(nullptr);
-                u->erase_with(i, nullptr);
-                delete i;
-            }
-            f->bbs.erase(u);
             deleted.insert(u);
-            delete u;
+            drop_bb(u, f);
+            res = true;
         }
     }
     // TODO: trivial phi induce
 
     infof(f->name, ": dbe done");
+    return res;
 }

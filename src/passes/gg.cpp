@@ -304,7 +304,7 @@ static void schedule_late(Inst *i) {
     bb->insts.insert(bb->insts.back, i);
 }
 
-void gvn_gcm(Func *f) {
+void gg(Func *f) {
     infof(f->name, "gg");
 
     build_loop(f);

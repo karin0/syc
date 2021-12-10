@@ -30,7 +30,8 @@ static void traverse(Inst *i) {
 }
 
 // TODO: keeping dce0 reduces 1 inst for some case
-void dce(Func *f) {
+bool dce(Func *f) {
+    bool res = false;
     infof("dce", f->name);
 
     FOR_BB_INST (i, bb, *f)
@@ -43,13 +44,15 @@ void dce(Func *f) {
     FOR_BB (bb, *f)
         FOR_LIST_MUT (i, bb->insts) if (!i->vis) {
             bb->erase_with(i, nullptr);
+            res = true;
             delete i;
         }
+
+    return res;
 }
 
-void dcbe(Func *f) {
-    void dbe(Func *);
-    dbe(f);
-    dce(f);
-    dbe(f);  // works anyhow
+bool dcbe(Func *f) {
+    bool r = dbe(f);
+    r = dce(f) || r;
+    return dbe(f) || r;  // works anyhow
 }

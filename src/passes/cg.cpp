@@ -1,7 +1,7 @@
 #include "ir_common.hpp"
 
 // TODO: affects A-13, A-14 even when doing nothing
-void build_cg(Prog *p) {
+void cg(Prog *p) {
     for (auto &f: p->funcs) {
         f.callers.clear();
         f.used_callers.clear();

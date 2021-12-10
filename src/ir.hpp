@@ -98,6 +98,7 @@ struct Value {
 
 struct Loop {
     vector<Loop *> chs;
+    vector<BB *> bbs;
     Loop *parent = nullptr;
     int depth;
     BB *header;
@@ -116,10 +117,13 @@ struct BB : Node<BB> {
 
     mips::BB *mbb;
 
+    Func *func;
     int id;
 
     int dom_depth;
     Loop *loop = nullptr;
+
+    bool is_once = false;
 
     template <class T>
     T *push(T *i) {
@@ -143,6 +147,8 @@ struct BB : Node<BB> {
     // i.e. there are insts after the first control inst in one
     // or after br_induce where BinaryBranchInsts occur
 
+    vector<BB **> get_succ_mut() const;
+
     friend std::ostream &operator << (std::ostream &, const BB &);
 };
 
@@ -160,6 +166,8 @@ struct Func {
     bool has_global_loads;
     bool has_param_loads;
     bool is_pure;
+    bool is_once;
+    bool is_unused = false;
 
     vector<Loop *> loop_roots;
 

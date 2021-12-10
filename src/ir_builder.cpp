@@ -370,6 +370,5 @@ Prog build_ir(ast::Prog &&ast) {
             bb_last->push(new ReturnInst{nullptr});
     }
 
-    build_cg(&res);
     return res;
 }
