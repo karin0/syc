@@ -61,7 +61,6 @@ struct Func {
     uint bb_cnt = 0;
     uint vreg_cnt = 0;
     vector<LoadInst *> arg_loads;
-    vector<BinaryInst *> allocas;
     uint max_call_arg_num = 0;
     uint spill_num = 0;  // without 4
     uint alloca_num = 0;  // sum of array lengths

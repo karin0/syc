@@ -1,8 +1,19 @@
 #include "mips_builder.hpp"
+#include <map>
+#include <tuple>
 
 using namespace mips;
 
 namespace mips {
+
+struct AllocaRef {
+    BinaryInst *add;
+    AccessInst *acc;
+
+    AllocaRef() : add(nullptr), acc(nullptr) {}
+    AllocaRef(AccessInst *acc) : add(nullptr), acc(acc) {}
+    AllocaRef(BinaryInst *add, AccessInst *acc) : add(add), acc(acc) {}
+};
 
 struct Builder {
     Prog *prog;
@@ -11,6 +22,8 @@ struct Builder {
     Operand args[MAX_ARG_REGS];
 
     Inst *push_point = nullptr;  // used by build_val for phi nodes only, make new pushed insts before the point
+
+    std::map<ir::AllocaInst *, std::tuple<BinaryInst *, BB *, vector<AllocaRef>>> alloca_users;
 
     Operand make_vreg() const {
         return func->make_vreg();
@@ -375,6 +388,11 @@ void build_buf_output(const string &s, Builder *ctx) {
     }
 }
 
+static void update_alloca_user(ir::Value *base, AllocaRef i, Builder *ctx) {
+    if_a (ir::AllocaInst, x, base)
+        std::get<2>(ctx->alloca_users[x]).push_back(i);
+}
+
 Operand ir::CallInst::build(mips::Builder *ctx) {
     if (is_a<ir::GetIntFunc>(func)) {
         ctx->new_syscall(5);
@@ -418,6 +436,7 @@ Operand ir::CallInst::build(mips::Builder *ctx) {
         ctx->func->max_call_arg_num = std::max(ctx->func->max_call_arg_num, n - MAX_ARG_REGS);
     // ctx->func->max_call_arg_num = std::max(ctx->func->max_call_arg_num, n);
     for (uint i = 0; i < n; ++i) {
+        update_alloca_user(args[i].value, {}, ctx);
         auto arg = BUILD_USE(args[i]);
         if (i < MAX_ARG_REGS)
             ctx->push(new MoveInst{Operand::make_machine(Regs::a0 + i), arg});
@@ -475,34 +494,36 @@ static int int_cast(uint x) {
         int(x - Operand::MAX_CONST - 1) + Operand::MIN_CONST;
 }
 
-std::pair<Reg, int> resolve_mem(Operand base, Operand off, Builder *ctx) {
-    // TODO: use sp when base is alloca
+static std::tuple<Reg, int, BinaryInst *> resolve_mem(Operand base, Operand off, Builder *ctx) {
+    // TODO: use sp when base is alloca and off is const
     if (off.kind == Operand::Const) {
         if (base.kind == Operand::Const) {
             // TODO: what if imm overflows?
             int d = base.val + off.val, imm;
             if (!is_imm(d) && is_imm(imm = int_cast(uint(d) - DATA_BASE))) {
                 ctx->prog->gp_used = true;
-                return {Operand::make_machine(Regs::gp), imm};
+                return {Operand::make_machine(Regs::gp), imm, nullptr};
             }
-            return {Operand::make_machine(0), base.val + off.val};
+            return {Operand::make_machine(0), base.val + off.val, nullptr};
         }
-        return {base, off.val};
+        return {base, off.val, nullptr};
     }
     // TODO: MARS will do the trick when the offset overflows imm (one more lui $at)
     // To allocate $at, we must do it explicitly
     if (base.kind == Operand::Const)
-        return {off, base.val};
+        return {off, base.val, nullptr};
     auto t = ctx->make_vreg();
-    ctx->push(new BinaryInst{BinaryInst::Add, t, base, off});
-    return {t, 0};
+    auto *j = ctx->push(new BinaryInst{BinaryInst::Add, t, base, off});
+    return {t, 0, j};
 }
 
 Operand ir::LoadInst::build(mips::Builder *ctx) {
     auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     auto dst = ctx->make_vreg();
     auto res = resolve_mem(base, off, ctx);
-    ctx->push(new mips::LoadInst{dst, res.first, res.second});
+    auto *i = new mips::LoadInst{dst, std::get<0>(res), std::get<1>(res)};
+    update_alloca_user(this->base.value, {std::get<2>(res), i}, ctx);
+    ctx->push(i);
     return dst;
 }
 
@@ -510,12 +531,15 @@ Operand ir::StoreInst::build(mips::Builder *ctx) {
     auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     auto src = ctx->ensure_reg(BUILD_USE(val));
     auto res = resolve_mem(base, off, ctx);
-    ctx->push(new mips::StoreInst{src, res.first, res.second});
+    auto *i = new mips::StoreInst{src, std::get<0>(res), std::get<1>(res)};
+    update_alloca_user(this->base.value, {std::get<2>(res), i}, ctx);
+    ctx->push(i);
     return Operand::make_void();
 }
 
 Operand ir::GEPInst::build(mips::Builder *ctx) {
     // dst = base + off * size
+    update_alloca_user(this->base.value, {}, ctx);
     auto base = BUILD_USE(this->base), off = BUILD_USE(this->off);
     using mips::BinaryInst;
     if (off.kind == Operand::Const) {
@@ -539,8 +563,10 @@ Operand ir::AllocaInst::build(mips::Builder *ctx) {
         Operand::make_machine(Regs::sp), Operand::make_const(int(ctx->func->alloca_num)));
     infof("alloca val", add->rhs.val);
     // will be fixed with max_call_arg_num
-    ctx->func->allocas.push_back(add);
     ctx->func->alloca_num += var->size();
+    auto &t = ctx->alloca_users[this];
+    std::get<0>(t) = add;
+    std::get<1>(t) = ctx->bb;
     return dst;
 }
 
@@ -676,6 +702,7 @@ Prog build_mr(ir::Prog &ir) {
         }
 
         ctx.func = func;
+        ctx.alloca_users.clear();
         FOR_BB (ibb, fun) {
             ctx.bb = ibb->mbb;
             FOR_INST (i, *ibb)
@@ -731,12 +758,33 @@ Prog build_mr(ir::Prog &ir) {
             }
         }
 
-        for (auto *x: func->allocas) {
-            asserts(x->rhs.is_const());
-            // TODO: what if imm overflows?
-            infof("fixing", func->ir->name, "idx =", x->rhs.val);
-            x->rhs.val = int((func->max_call_arg_num + uint(x->rhs.val)) << 2);
-            infof("now val =", x->rhs.val);
+        for (const auto &p: ctx.alloca_users) {
+            auto t = p.second;
+            auto *add = std::get<0>(t);
+            auto &users = std::get<2>(t);
+            asserts(add->rhs.is_const());
+            int off = int((func->max_call_arg_num + uint(add->rhs.val)) << 2);
+            infof("fixing alloca in", func->ir->name, "idx =", add->rhs.val, "off =", off);
+
+            bool dirty = false;
+            for (auto ref: users) {
+                if (auto *i = ref.acc) {
+                    i->off += off;
+                    if (auto *p = ref.add) {
+                        p->lhs = Reg::make_machine(Regs::sp);
+                    } else
+                        i->base = Reg::make_machine(Regs::sp);
+                } else
+                    dirty = true;
+            }
+            if (dirty) {
+                // XXX: This may exceed range of imm and cause an assertion failure when printing,
+                // so we don't handle too big stacks
+                add->rhs.val = off;
+            } else {
+                auto *bb = std::get<1>(t);
+                bb->insts.erase(add);
+            }
         }
     }
 
