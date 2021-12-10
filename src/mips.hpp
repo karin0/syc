@@ -91,28 +91,17 @@ struct Prog {
     friend std::ostream &operator << (std::ostream &, const Prog &);
 };
 
-/*
-Registers for O32 calling convention
-Name	Number	Use	Callee must preserve?
-$zero	$0	constant 0	N/A
-$at	$1	assembler temporary	No
-$v0–$v1	$2–$3	values for function returns and expression evaluation	No
-$a0–$a3	$4–$7	function arguments	No
-$t0–$t7	$8–$15	temporaries	No
-$s0–$s7	$16–$23	saved temporaries	Yes
-$t8–$t9	$24–$25	temporaries	No
-$k0–$k1	$26–$27	reserved for OS kernel	N/A
-$gp	$28	global pointer	Yes (except PIC code)
-$sp	$29	stack pointer	Yes
-$fp	$30	frame pointer	Yes
-$ra	$31	return address	N/A
-*/
-
 namespace Regs {
-
-    constexpr uint at = 1, v0 = 2, v1 = 3, a0 = 4, t0 = 8, s0 = 16, s7 = 23,
-        t8 = 24, t9 = 25, k0 = 26, k1 = 27, gp = 28, sp = 29, fp = 30, ra = 31,
-        MAX = 32;
+    enum {
+        at = 1, v0, v1,
+        a0 = 4,
+        t0 = 8,
+        s0 = 16,
+        s7 = 23,
+        t8 = 24, t9,
+        k0 = 26, k1,
+        gp = 28, sp, fp, ra, MAX
+    };
 
     constexpr std::array<uint, 14> caller_saved{
         v0, v1,
@@ -121,21 +110,19 @@ namespace Regs {
         13, 14, 15,
     };
 
-    constexpr std::array<uint, 11> callee_saved{
+    constexpr std::array<uint, 13> callee_saved{
         s0, 17, 18, 19, 20,
-        21, 22, 23,
-        t8, t9, fp
+        21, 22, 23, 24, 25, 26, 27, 30
     };
 
     // v, a, t seems optimal
-    constexpr std::array<uint, 25> allocatable{
+    constexpr std::array<uint, 27> allocatable{
         v0, v1,
         a0,  5,  6,  7,
         t0,  9, 10, 11, 12,
         13, 14, 15,
         s0, 17, 18, 19, 20,
-        21, 22, 23,
-        t8, t9, fp
+        21, 22, 23, 24, 25, 26, 27, 30
     };
 
     extern uint inv_allocatable[32];
@@ -143,7 +130,6 @@ namespace Regs {
     void init();
     string to_name(uint id);
     bool is_callee_saved(Reg x);  // and allocatable
-
 }
 
 struct Inst : Node<Inst> {
