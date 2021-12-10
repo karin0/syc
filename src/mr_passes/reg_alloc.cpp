@@ -74,8 +74,7 @@ struct Allocater {
     }
 
     void build() {
-        // FOR_BB (bb, *func) { // TODO: ??
-        for (auto *bb = func->bbs.back; bb; bb = bb->prev) {
+        FOR_BB (bb, *func) {
             auto live = bb->live_out;
             for (Inst *i = bb->insts.back, *prev; i; i = prev) {
                 prev = i->prev;
@@ -343,7 +342,6 @@ struct Allocater {
                     break;
                 }
             infof(func->ir->name, "coloring", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]), u->color);
-            // TODO: in what order?
             asserts(u->color < K);
         } else {
             infof(func->ir->name, "spilling", u->reg);
@@ -371,11 +369,11 @@ struct Allocater {
 
         for (auto *u: coalesced_nodes) {
             auto *a = get_alias(u);
-            u->color = get_color(a);  // todo: why double coloring?
+            u->color = get_color(a);
             // asserts(u->color < K);
             if (u->color >= K) {
                 asserts(spilled_nodes.count(a));
-                continue; // todo: qwqwq
+                continue;
             }
             infof(func->ir->name, "coalesce coloring", u->reg, "with", Regs::to_name(Regs::allocatable[u->color]),
                   u->color, "just as", a->reg, "whose color is also", a->color);
@@ -391,7 +389,7 @@ struct Allocater {
                         x->kind = Reg::Machine;
                     else if (u.colored) {
                         infof("replacing", u.reg, *x);
-                        *x = Reg::make_machine(Regs::allocatable[u.color]); // TODO: QAQ why machined?
+                        *x = Reg::make_machine(Regs::allocatable[u.color]);
                         infof("to", *x);
                     }
                 }
@@ -448,7 +446,6 @@ struct Allocater {
                 }
                 if (cnt++ > 30) {
                     cp();
-                    // TODO: cnt = 0 ?
                     cnt = 0;
                 }
             }
@@ -494,7 +491,6 @@ struct Allocater {
 
 }
 
-// TODO: alloc sp (or just use in mem insts)
 void reg_alloc(Func *f) {
     static reg_allocater::Allocater a;
     a.run(f);
