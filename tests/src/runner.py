@@ -1,6 +1,20 @@
 import shutil
-from util import *
 from conf import *
+
+
+def read_course_stat(fn: str) -> str:
+    res = []
+    with open(fn, encoding='utf-8') as fp:
+        for line in fp:
+            p = line.find(':')
+            if p >= 0:
+                l = line[:p].strip()
+                r = line[p + 1:].strip()
+                res.append(l)
+                res.append(r)
+    res.append('cnt 0')
+    print('course res', res)
+    return ' '.join(res)
 
 
 def err_runner(wd, src_file, in_file, ans_file, msg):
@@ -81,12 +95,13 @@ def std_runner(rid, src_file, in_file, ans_file, msg):
             msg('simulating')
             in_fp.seek(0)
             stat = subprocess.run(
-                ['java', '-jar', mars_path, 'nc', 'me', 'mc', 'Default', asm_fn],
+                ['java', '-jar', mars_path, 'nc', 'me', 'mc', 'Default', path.realpath(asm_fn)],
                 stdin=in_fp,
                 stdout=out_fp,
                 stderr=subprocess.PIPE,
                 check=True,
-                timeout=mars_timeout
+                timeout=mars_timeout,
+                cwd=rid
             ).stderr
             if isinstance(stat, bytes):
                 stat = stat.decode('utf-8')
@@ -96,6 +111,10 @@ def std_runner(rid, src_file, in_file, ans_file, msg):
                 res = (src_file, stat)
             elif stat:
                 raise RuntimeError('mars complained: ' + stat)
+            else:
+                stat = read_course_stat(path.join(rid, 'InstructionStatistics.txt'))
+                msg('course stat ' + stat)
+                res = (src_file, stat)
 
     '''
     with open(ans_file, 'rb') as fp:
@@ -107,6 +126,7 @@ def std_runner(rid, src_file, in_file, ans_file, msg):
     if ans_bytes != out_bytes:
         raise RuntimeError(f'diff {ans_file} {out_fn}')
     '''
+
     call(diff + [ans_file, out_fn])
     msg('ok')
     return res

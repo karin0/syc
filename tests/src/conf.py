@@ -2,7 +2,8 @@ import multiprocessing
 from util import *
 
 project_dir = '/home/karin0/lark/buaa/ct/syc'
-mars_path = '/home/karin0/lark/buaa/ct/mars.jar'
+# mars_path = '/home/karin0/lark/buaa/ct/mars.jar'
+mars_path = '/home/karin0/lark/buaa/ct/Mars-Compile-2021.jar'  # must be absolute
 results_file = 'results.csv'
 
 compile_timeout = 5
