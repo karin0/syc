@@ -14,7 +14,7 @@ static Prog &operator << (Prog &lh, void (*rh)(Func *)) {
     return lh;
 }
 
-void run_mips_passes(Prog &prog, bool opt) {
+void run_mips_passes(Prog &prog, bool) {
     // TODO: non-opt
     Regs::init();
 
