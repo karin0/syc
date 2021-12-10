@@ -139,6 +139,9 @@ static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {
         return Operand::make_const(0);
     if (rh == 1)
         return lh;
+    if (rh == -1)
+        return build_neg_reg(lh, ctx);
+
     bool neg = rh < 0;
     uint a = rh;
     if (neg)
@@ -154,22 +157,27 @@ static Reg build_reg_mult_const(Reg lh, int rh, Builder *ctx) {
 }
 
 static Operand build_reg_div_const(Reg lh, int d, bool is_mod, Builder *ctx) {
-    uint a = std::abs(d);
+    uint a = d;
+    if (d < 0)
+        a = -a;
 
     if (a == 1) {
-        auto dst = ctx->make_vreg();
         if (is_mod)
             return Operand::make_const(0);
-        if (d == 1)
-            ctx->push(new MoveInst{dst, lh});
-        else
-            ctx->push(new BinaryInst{BinaryInst::Sub, dst, Reg::make_machine(0), lh});
-        return dst;
+        if (d < 0)
+            return build_neg_reg(lh, ctx);
+        return lh;
     }
 
     Reg dst;
     if (!(a & (a - 1))) {
-        // TODO: handle mod
+        /* this fails negative lhs and fixing's not worth it:
+            dst = ctx->make_vreg();
+            ctx->new_binary(BinaryInst::And, dst, lh, Operand::make_const(a - 1));
+            if (d < 0)
+                return build_neg_reg(dst, ctx);
+            return dst;
+        */
         uint l = __builtin_ctz(a);
         auto v0 = ctx->make_vreg();
         ctx->push(new ShiftInst{ShiftInst::Ra, v0, lh, l - 1});
@@ -227,7 +235,6 @@ static Operand build_reg_div_const(Reg lh, int d, bool is_mod, Builder *ctx) {
     if (!is_mod)
         return dst;
 
-    // ctx->push(new BinaryInst{BinaryInst::Mul, v4, dst, Reg::make_const(d)});  // TODO: opti
     auto v4 = build_reg_mult_const(dst, d, ctx);
     auto r = ctx->make_vreg();
     ctx->push(new BinaryInst{BinaryInst::Sub, r, lh, v4});
@@ -241,7 +248,7 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
         if (lh.kind == Operand::Const)
             return Operand::make_const(ir::eval_bin(op, lh.val, rh.val));
 
-    if (op == tkd::Div || op == tkd::Mod) {  // TODO
+    if (op == tkd::Div || op == tkd::Mod) {
         if (rh.is_const())
             return build_reg_div_const(lh, rh.val, op == tkd::Mod, ctx);
         auto dst = ctx->make_vreg();
@@ -304,9 +311,6 @@ Operand ir::BinaryInst::build(mips::Builder *ctx) {
                 ctx->push(new BinaryInst{BinaryInst::Sub, dst, lh, rh});
             return dst;
 
-        // TODO: opti for branch (detect slt* before b*)
-        // TODO: eliminate li-s in case 23 (imm moves) data flow analysis?
-        // TODO: maybe it's better to do all this MR things after great IR passes
         case tkd::Lt:
             ctx->new_binary(BinaryInst::Lt, dst, lh, rh);
             return dst;
