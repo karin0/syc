@@ -1,8 +1,8 @@
 #include "ir.hpp"
 #include <ostream>
 
-#define INST_PRE "%"
-#define BB_PRE "$L"
+#define INST_PRE "$"
+#define BB_PRE "@L"
 
 namespace ir {
 
@@ -128,8 +128,9 @@ void BinaryInst::print(std::ostream &os) {
 void CallInst::print(std::ostream &os) {
     for (auto &u: args)
         os << "push " << u << ENDL;
-    os << "call " << func->name << ENDL
-          INST_PRE << id << " = RET";
+    os << "call " << func->name;
+    if (func->returns_int)
+        os << ENDL INST_PRE << id << " = RET";
 }
 
 void BranchInst::print(std::ostream &os) {
