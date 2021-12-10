@@ -1,11 +1,5 @@
 #include "ir_common.hpp"
 #include <unordered_map>
-#include <unordered_set>
-
-struct S {
-    Func *user = nullptr;
-    bool stored = false;
-};
 
 // Require d is global
 // Require mem2reg later
@@ -105,8 +99,8 @@ void build_once(Prog *p) {
     for (auto &f: p->funcs)
         uniq_call[&f] = nullptr;
 
-    for (auto &f: p->funcs) {
-        FOR_BB_INST (i, bb, f) {
+    for (auto &f: p->funcs)
+        FOR_BB_INST (i, bb, f)
             if_a (CallInst, x, i) {
                 auto *g = x->func;
                 auto it = uniq_call.find(g);
@@ -118,17 +112,13 @@ void build_once(Prog *p) {
                 }
             }
 
-        }
-    }
-
-    for (auto p: uniq_call) {
+    for (auto p: uniq_call)
         if (p.second) {
             auto *bb = p.second->bb;
             if (bb->is_once)
                 bb->func->callers.insert(p.first);
         } else if (!p.first->is_once)
             p.first->is_unused = true;  // TODO: drop them
-    }
 
     vector<Func *> wl = {main};
     while (!wl.empty()) {
