@@ -13,18 +13,21 @@ std::ostream &operator << (std::ostream &os, const BB &bb) {
     return os;
 }
 
+#define GP_SYMBOL "$28"
+
 std::ostream &operator << (std::ostream &os, const Operand &x) {
     switch (x.kind) {
         case Operand::Virtual:
             os << "V";
             break;
         case Operand::Machine:
-            os << '$' << Regs::to_name(x.val);
+            // os << '$' << Regs::to_name(x.val);
+            os << '$' << x.val;
             return os;
         case Operand::Const:
             break;
         case Operand::Void:
-            fatal("found used void operand");
+            fatal("void operand in code");
     }
     os << x.val;
     return os;
@@ -48,7 +51,7 @@ static void put_li(std::ostream &os, Reg dst, int src) {
     else {
         int i;
         if (is_imm(i = (src ^ int(DATA_BASE))))
-            os << "xori " << dst << ", $gp, " << i;
+            os << "xori " << dst << ", " GP_SYMBOL ", " << i;
         else
             os << "li " << dst << ", " << src;
     }
